@@ -1,0 +1,172 @@
+---
+title: "Splitting 16S and 18S reads"
+date: "14 April, 2025"
+author: "Augustus Pendleton"
+knitr: 
+  opts_chunk: 
+    fig.path: ../figures/00_Split_ASVs/
+    eval: false
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+# Creating Conda Envs
+
+Important: I've cloned [this repo](https://github.com/jcmcnch/eASV-pipeline-for-515Y-926R/tree/master) on April 11th, commit ID 
+4aea820, in the directory just above my project directory. I then transferred some files from that repo into my own repo to work with (code/mcnichol_split_scripts). I also pulled code directly from some of those scripts, which I show below. 
+
+For those aiming to replicate this analysis, because we are using bash commands that involve navigating about file paths, please be extremely careful in running this, at least the first time. 
+
+## Set-up
+
+First, we create two conda environments which we'll use for cutadapt and bbmap
+
+
+::: {.cell layout-align="center" engine.opts='-l'}
+
+```{.bash .cell-code}
+#needed for step 1: primer trimming
+conda env create -n cutadapt-env --file code/mcnichol_split_scripts/env/cutadapt-env.yaml
+
+#needed for step 2: splitting 16S from 18S
+conda env create -n bbmap-env --file code/mcnichol_split_scripts/env/bbmap.yaml
+
+```
+:::
+
+
+We'll also download two classification databases, to separate out reads as prokaryotic or eukaryotic. 
+
+
+::: {.cell layout-align="center" engine.opts='-l'}
+
+```{.bash .cell-code}
+
+# Download classifier
+
+cd code/mcnichol_split_scripts/qiime2-classification-db 
+
+wget https://data.qiime2.org/classifiers/sklearn-1.4.2/silva/silva-138-99-nb-classifier.qza
+
+cd ../../../
+```
+:::
+
+::: {.cell layout-align="center" engine.opts='-l'}
+
+```{.bash .cell-code}
+
+conda activate bbmap-env
+
+#make directory, enter it
+cd code/mcnichol_split_scripts/bbsplit_db
+
+#download database files from OSF
+for item in kv3xp eux4r npb2k 4qtev s5j6q 5jmkv eahds ; do curl -O -J -L https://osf.io/$item/download ; done
+
+#make databases
+chmod u+x make-dbs-bbsplit.sh ; ./make-dbs-bbsplit.sh
+
+conda deactivate
+
+cd ../../../
+
+```
+:::
+
+
+## Trim primers
+
+Next, we'll use cutadapt to trim primers off our reads, and discard reads which don't start with the correct primers. Note that we did edit the .cfg (config) file to have our correct primers, which it won't have by default!
+
+Note, that I'm using the recommended cutadapt environment, whose version (~3.12) doesn't include the option to search for reverse complements. However, I'm loathe to modify this environment to a more recent cutadapt, knowing that other steps may get messed up. I know from previous projects that it is likely that a small proportion of our reads might be reverse complemented (forward and reverse switched). For now, our cutadapt logs seem to indicate that a large majority of reads are passing, so I'm not taking the risk of modifying McNichol's environments. 
+
+
+::: {.cell layout-align="center" engine.opts='-l'}
+
+```{.bash .cell-code}
+
+source code/mcnichol_split_scripts/config/515Y-806RB.cfg
+
+conda activate cutadapt-env
+
+mkdir -p data/mcnichol-trimmed data/logs/mcnichol-trimmed
+
+for item in `ls data/raw_gzipped_fastqs_symlinks/*$rawFileEndingR1` 
+
+	do
+
+	filestem=`basename $item $rawFileEndingR1`
+	R1=data/raw_gzipped_fastqs_symlinks/${filestem}$rawFileEndingR1
+	R2=data/raw_gzipped_fastqs_symlinks/${filestem}$rawFileEndingR2
+
+        cutadapt --no-indels --pair-filter=any --error-rate=0.2 --discard-untrimmed \
+	-g ^GTGYCAGCMGCCGCGGTAA -G ^CCGYCAATTYMTTTRAGTTT \
+	-o data/mcnichol-trimmed/${filestem}.R1.trimmed.fastq \
+	-p data/mcnichol-trimmed/${filestem}.R2.trimmed.fastq $R1 $R2 \
+	2>&1 | tee -a data/logs/mcnichol-trimmed/${filestem}.cutadapt.stderrout
+
+done
+
+conda deactivate
+
+```
+:::
+
+
+## Split reads to prokaryotic and eukaryotic
+
+Finally, we split reads into eukaryotic and prokaryotic reads using our bbmap environment and bbsplit script.
+
+
+::: {.cell layout-align="center" engine.opts='-l'}
+
+```{.bash .cell-code}
+
+conda activate bbmap-env
+
+source code/mcnichol_split_scripts/config/515Y-806RB.cfg
+#optionally add in in-silico mocks to denoising pipeline
+
+mkdir -p data/mcnichol-bbsplit/02-PROKs/
+mkdir -p data/mcnichol-bbsplit/02-EUKs/
+
+mkdir data/logs/mcnichol-bbsplit
+
+for item in `ls data/mcnichol-trimmed/*.R1.trimmed.fastq`
+
+	do
+
+	filestem=`basename $item .R1.trimmed.fastq`
+	R1in=data/mcnichol-trimmed/$filestem.R1.trimmed.fastq
+	R2in=data/mcnichol-trimmed/$filestem.R2.trimmed.fastq
+
+	bbsplit.sh usequality=f qtrim=f minratio=0.30 minid=0.30 pairedonly=f threads=20 -Xmx100g \
+	path=$bbsplitdb \
+	in=$R1in in2=$R2in basename=$filestem.trimmed.%_#.fastq \
+	2>&1 | tee -a data/logs/mcnichol-bbsplit/$filestem.bbsplit_log
+
+done
+
+mv *EUK*fastq  data/mcnichol-bbsplit/02-EUKs/
+mv *PROK*fastq data/mcnichol-bbsplit/02-PROKs/
+
+conda deactivate
+
+```
+:::
+
+
+I also gzip all of our intermediates, just to save some server space. 
+
+
+::: {.cell layout-align="center" engine.opts='l'}
+
+```{.bash .cell-code}
+
+gzip -r data/mcnichol-trimmed
+gzip -r data/mcnichol-bbsplit
+```
+:::

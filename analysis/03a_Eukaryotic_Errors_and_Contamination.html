@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.450">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Augustus Pendleton">
+<meta name="dcterms.date" content="2025-04-16">
+
+<title>Assess Errors and Contamination</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="03a_Eukaryotic_Errors_and_Contamination_files/libs/clipboard/clipboard.min.js"></script>
+<script src="03a_Eukaryotic_Errors_and_Contamination_files/libs/quarto-html/quarto.js"></script>
+<script src="03a_Eukaryotic_Errors_and_Contamination_files/libs/quarto-html/popper.min.js"></script>
+<script src="03a_Eukaryotic_Errors_and_Contamination_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="03a_Eukaryotic_Errors_and_Contamination_files/libs/quarto-html/anchor.min.js"></script>
+<link href="03a_Eukaryotic_Errors_and_Contamination_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="03a_Eukaryotic_Errors_and_Contamination_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="03a_Eukaryotic_Errors_and_Contamination_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="03a_Eukaryotic_Errors_and_Contamination_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="03a_Eukaryotic_Errors_and_Contamination_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article toc-left">
+<div id="quarto-sidebar-toc-left" class="sidebar toc-left">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul class="collapse">
+  <li><a href="#goals-of-our-pre-processing-file" id="toc-goals-of-our-pre-processing-file" class="nav-link active" data-scroll-target="#goals-of-our-pre-processing-file">Goals of our Pre-Processing File</a>
+  <ul class="collapse">
+  <li><a href="#load-packages-and-functions" id="toc-load-packages-and-functions" class="nav-link" data-scroll-target="#load-packages-and-functions">Load Packages and Functions</a></li>
+  <li><a href="#load-the-data" id="toc-load-the-data" class="nav-link" data-scroll-target="#load-the-data">Load the data!</a></li>
+  </ul></li>
+  <li><a href="#add-metadata-to-physeq" id="toc-add-metadata-to-physeq" class="nav-link" data-scroll-target="#add-metadata-to-physeq">Add metadata to physeq</a></li>
+  <li><a href="#looking-at-bacteria" id="toc-looking-at-bacteria" class="nav-link" data-scroll-target="#looking-at-bacteria">Looking at bacteria</a></li>
+  <li><a href="#remove-unnecessary-taxa" id="toc-remove-unnecessary-taxa" class="nav-link" data-scroll-target="#remove-unnecessary-taxa">Remove unnecessary taxa</a>
+  <ul class="collapse">
+  <li><a href="#remove-control-samples" id="toc-remove-control-samples" class="nav-link" data-scroll-target="#remove-control-samples">Remove Control samples</a></li>
+  </ul></li>
+  <li><a href="#evaluating-accuracy" id="toc-evaluating-accuracy" class="nav-link" data-scroll-target="#evaluating-accuracy">Evaluating Accuracy</a></li>
+  <li><a href="#save-preprocessed-phyloseq" id="toc-save-preprocessed-phyloseq" class="nav-link" data-scroll-target="#save-preprocessed-phyloseq">Save preprocessed phyloseq!</a></li>
+  <li><a href="#session-information" id="toc-session-information" class="nav-link" data-scroll-target="#session-information">Session Information</a></li>
+  </ul>
+</nav>
+</div>
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Assess Errors and Contamination</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Augustus Pendleton </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">April 16, 2025</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+</header>
+
+<section id="goals-of-our-pre-processing-file" class="level1">
+<h1>Goals of our Pre-Processing File</h1>
+<p>We will work here in this document to remove any unncessary ASVs or samples, such as:</p>
+<ol type="1">
+<li>Mitochondria or plastids (unlikely)</li>
+<li>Contamination within our blanks</li>
+<li>Domain Bacteria</li>
+<li>Splitting metazoans away</li>
+</ol>
+<section id="load-packages-and-functions" class="level2">
+<h2 class="anchored" data-anchor-id="load-packages-and-functions">Load Packages and Functions</h2>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load Packages</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>pacman<span class="sc">::</span><span class="fu">p_load</span>(phyloseq, Biostrings, dada2, microViz, tidyverse, <span class="at">install =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"code/R/plotting_aesthetics.R"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="load-the-data" class="level2">
+<h2 class="anchored" data-anchor-id="load-the-data">Load the data!</h2>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load in the raw_phyloseq data from DADA2_workflow.Rmd</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">load</span>(<span class="st">"data/02a_Eukaryotic_Taxonomic_Classification/raw_euk_physeq.RData"</span>)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>raw_euk_physeq</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>phyloseq-class experiment-level object
+otu_table()   OTU Table:         [ 1622 taxa and 76 samples ]
+tax_table()   Taxonomy Table:    [ 1622 taxa by 11 taxonomic ranks ]</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">load</span>(<span class="st">"data/01a_Eukaryotic_Denoising/track_df_euk.RData"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+</section>
+<section id="add-metadata-to-physeq" class="level1">
+<h1>Add metadata to physeq</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sample_data</span>(raw_euk_physeq) <span class="ot">&lt;-</span> track_df_euk</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="looking-at-bacteria" class="level1">
+<h1>Looking at bacteria</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>tax_df <span class="ot">&lt;-</span> </span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>raw_euk_physeq <span class="sc">%&gt;%</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tax_table</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">data.frame</span>()</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>tax_df <span class="sc">%&gt;%</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(Domain)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>          Domain    n
+1       Bacteria    1
+2      Eukaryota 1607
+3 Eukaryota:nucl   12
+4           &lt;NA&gt;    2</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>tax_df <span class="sc">%&gt;%</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Domain <span class="sc">==</span> <span class="st">"Eukaryota:nucl"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>                 Domain     Supergroup         Division        Subdivision
+EUK_32   Eukaryota:nucl Cryptista:nucl Cryptophyta:nucl Cryptophyta_X:nucl
+EUK_188  Eukaryota:nucl Cryptista:nucl Cryptophyta:nucl Cryptophyta_X:nucl
+EUK_316  Eukaryota:nucl Cryptista:nucl Cryptophyta:nucl Cryptophyta_X:nucl
+EUK_488  Eukaryota:nucl Cryptista:nucl Cryptophyta:nucl Cryptophyta_X:nucl
+EUK_615  Eukaryota:nucl Cryptista:nucl Cryptophyta:nucl Cryptophyta_X:nucl
+EUK_709  Eukaryota:nucl Cryptista:nucl Cryptophyta:nucl Cryptophyta_X:nucl
+EUK_834  Eukaryota:nucl Cryptista:nucl Cryptophyta:nucl Cryptophyta_X:nucl
+EUK_901  Eukaryota:nucl Cryptista:nucl Cryptophyta:nucl Cryptophyta_X:nucl
+EUK_1238 Eukaryota:nucl Cryptista:nucl Cryptophyta:nucl Cryptophyta_X:nucl
+EUK_1331 Eukaryota:nucl Cryptista:nucl Cryptophyta:nucl Cryptophyta_X:nucl
+EUK_1343 Eukaryota:nucl Cryptista:nucl Cryptophyta:nucl Cryptophyta_X:nucl
+EUK_1531 Eukaryota:nucl Cryptista:nucl Cryptophyta:nucl Cryptophyta_X:nucl
+                      Class                Order                 Family
+EUK_32   Cryptophyceae:nucl Cryptomonadales:nucl Cryptomonadales_X:nucl
+EUK_188  Cryptophyceae:nucl Cryptomonadales:nucl Cryptomonadales_X:nucl
+EUK_316  Cryptophyceae:nucl Cryptomonadales:nucl Cryptomonadales_X:nucl
+EUK_488  Cryptophyceae:nucl Pyrenomonadales:nucl  Pyrenomonadaceae:nucl
+EUK_615  Cryptophyceae:nucl Cryptomonadales:nucl Cryptomonadales_X:nucl
+EUK_709  Cryptophyceae:nucl Cryptomonadales:nucl Cryptomonadales_X:nucl
+EUK_834  Cryptophyceae:nucl Cryptomonadales:nucl Cryptomonadales_X:nucl
+EUK_901  Cryptophyceae:nucl Cryptomonadales:nucl   Hemiselmidaceae:nucl
+EUK_1238 Cryptophyceae:nucl Cryptomonadales:nucl Cryptomonadales_X:nucl
+EUK_1331 Cryptophyceae:nucl Cryptomonadales:nucl Cryptomonadales_X:nucl
+EUK_1343 Cryptophyceae:nucl Cryptomonadales:nucl Cryptomonadales_X:nucl
+EUK_1531 Cryptophyceae:nucl Cryptomonadales:nucl Cryptomonadales_X:nucl
+                     Genus                           Species      ASV
+EUK_32   Plagioselmis:nucl       Plagioselmis_lacustris:nucl   EUK_32
+EUK_188  Plagioselmis:nucl       Plagioselmis_lacustris:nucl  EUK_188
+EUK_316  Plagioselmis:nucl       Plagioselmis_lacustris:nucl  EUK_316
+EUK_488    Rhodomonas:nucl               Rhodomonas_sp.:nucl  EUK_488
+EUK_615   Cryptomonas:nucl    Cryptomonas_pyrenoidifera:nucl  EUK_615
+EUK_709  Plagioselmis:nucl       Plagioselmis_lacustris:nucl  EUK_709
+EUK_834   Cryptomonas:nucl                              &lt;NA&gt;  EUK_834
+EUK_901    Chroomonas:nucl          Chroomonas_coerulea:nucl  EUK_901
+EUK_1238  Cryptomonas:nucl          Cryptomonas_curvata:nucl EUK_1238
+EUK_1331 Plagioselmis:nucl       Plagioselmis_lacustris:nucl EUK_1331
+EUK_1343  Cryptomonas:nucl Cryptomonas_tetrapyrenoidosa:nucl EUK_1343
+EUK_1531  Cryptomonas:nucl    Cryptomonas_pyrenoidifera:nucl EUK_1531
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ASVseqs
+EUK_32   TTCCAGCTCCAATAGCGTATACTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTCGAATGAAGGTTTCTTGAACTGCGCGAACTTCTAGGTGTAACCTAGACTAGTTTGTGCACAAGAACCTCCCTTTTGTAGTTGATTAAATCCAATTGGATCTAATTGTCTACATGCATTACTGTGAACAAAATAGAGTGTTCATGGCAGGTCAATTTAGGCTTGAATACCTCAGCATGGAATAATAGAATAGGACTTCTGGTTCTATTTTGTTGGTTTTTGGAGCCGAAGCAACTGCGAAAGCATCTGCCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAGGGGATCGAAGACGATTAGATACCGTCGTAGTCCTAACCATAAACTATGCCGACTGGGGATTGGTAGATGTACCAAAAACGACTCTATCAGCACCCTATGAGAAATCAAAGTCTTTGGGTTCTGGGGGGAGTATGGTCGCAAGGCTG
+EUK_188  TTCCAGCTCCAATAGCGTATACTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTCGAATGAAGGTTTCTTGAATTGCGCGAACTTCTAAGTGTAACTTAGACTAGTTTGCGCACAAGAACCTCCCTTATGTGTCTTAATAGATCCAATTTATTTTTGGATCTAATCAGTCACATGCATTACTGTGAACAAAATAGAGTGTTCATGGCAGGTCAATTTAGGCTTGAATACCTCAGCATGGAATAATAGAATAGGACTTCCGGTTCTATTTTGTTGGTTTTTGGACAACTGCGAAAGCATCTGCCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAGGGGATCGAAGACGATTAGATACCGTCGTAGTCCTAACCATAAACTATGCCGACTGGGGATTGGTAGATGTACCAAAAACGACTCTATCAGCACCCTATGAGAAATCAAAGTCTTTGGGTTCTGGGGGGAGTATGGTCGCAAGGCTG
+EUK_316  TTCCAGCTCCAATAGCGTATACTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTCGAATGAAGGTTTTTTTGTTATGCGGACTCTTAGGTGTTACCTAGGTGGTCTGCGTTCAATAACCTCCCTGGTGTGATACAAATTTTTTCGACTGAAAAAATTTGTTCACATGCATTACTGTGAACAAAATAGAGTGTTCATGGCAGGCCAAATTAGGCTTGAATACCTCAGCATGGAATAATAGAATAGGACTTCCGGTTCTATTTTGTTGGTTTTTGGAGCCGAAGTCAACTGCGAAAGCATCTGCCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAGGGGATCGAAGACGATTAGATACCGTCGTAGTCCTAACCATAAACTATGCCGACTGGGGATTGGTAGATGTACCAAAAACGACTCTATCAGCACCCTATGAGAAATCAAAGTCTTTGGGTTCTGGGGGGAGTATGGTCGCAAGGCTG
+EUK_488  TTCCAGCTCCAATAGCGTATACTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTCGAATTCGGACCTGTGGGTGCGGATTGATCTGTAAAGGTCCTTTGGCACACCAGGTCTAATTTTGTCGTTGCAAAGCCCCGCCTCCTTGGGCGTTGTGGTCTGCAAAGCGGCATCTTTTACTGTGAATAAAATAGAGTGTTCATGGCAGGCCTTTGAAAGGCTTAAATACCTCAGCATGGAATAATAGAATAGGACTTCCGGTTCTATTTTGTTGGTTTTTGGAGCCGACAACTGCGAAAGCATCTGCCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAAGGGATCGAAGACGATTAGATACCGTCGTAGTCTTAACCATAAACTATGCCGACTGGGGATTGGTAGATGTACCAAAAACGACTCTATCAGCACCCTATGAGAAATCAAAGTCTATGGGTTCTGGGGGGAGTATGGTCGCAAGGCTG
+EUK_615  TTCCAGCTCCAATAGCGTATACTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTCGAATTTTAGTTTTAGATTGTTGGCTCGTTATGAATAATAGCGTAGGCTAGAACAATATAAAACTTTGTTTGCTAATTTATAAAACGTCTCTTTAATGAGTCTTTGTAAATTATGCATTTTTTACTGTGAACAAAATAGAGTGTTCATGGCAGGCCTTAAAGGCTTATATACCTCAGCATGGAATAATAGAGTAGGACTTCTGGTTCTATTTTATTGGTTATTGGAGCCCAACTGCGAAAGCATCTGCCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAGGGGATCGAAGACGATTAGATACCGTCGTAGTCTTAACCATAAACTATGCCGACTGGGGATTGGTAGATGTATCAAATACGACTCTATCAGTATCCTATGAGAAATCAAAGTCTCTGGGTTCTGGGGGGAGTATGGTCGCAAGGCTG
+EUK_709  TTCCAGCTCCAATAGCGTATACTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTCGAATGAAGGTTTTTTTTGTTATGCGGACTCTTGGGTGTTACCTAGGTAGTCTGCGTTCAATAACCTCCCTGGTGTGATACAAATTTCTTCAACCGAAAAAATTTGTTCACATGCATTACTGTGAACAAAATAGAGTGTTCATGGCAGGCCAAATTAGGCTTGAATACCTCAGCATGGAATAATAGAATAGGACTTCCGGTTCTATTTTGTTGGTTTTTGGAGCCGAAGCAACTGCGAAAGCATCTGCCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAGGGGATCGAAGACGATTAGATACCGTCGTAGTCCTAACCATAAACTATGCCGACTGGGGATTGGTAGATGTACCAAAAACGACTCTATCAGCACCCTATGAGAAATCAAAGTCTTTGGGTTCTGGGGGGAGTATGGTCGCAAGGCTG
+EUK_834  TTCCAGCTCCAATAGCGTATACTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTCGAATATTAGTTTCCAATCGCTGCCTTGTTCTTTATTGTAACAGAGGCTTGGTGTGTTGGAATCTTTTTTTTGTCCAATGGAAGACATTCATTTTGAATGAAACCCATTGTGCATATATTACTGTGAATAAAATAGAGTGTTCATGGCAGGCCTTTATGGCTTATATACCTTAGCATGGAATAATAGAATAGGACTGTCGGTTCTATTTTATTGGTTATTGGAGCCGAACAACTGCGAAAGCATCTGCCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAGGGGATCGAAGACGATTAGATACCGTCGTAGTCTTAACCATAAACTATGCCGACTGGGGATTGGTAGATGTATCAAATACAACTCTATCAGTATCCTATGAGAAATCAAAGTCTCTGGGTTCTGGGGGGAGTATGGTCGCAAGGCTG
+EUK_901  TTCCAGCTCCAATAGTGTATATTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTCGAATTTTAAGATATCAGCGCCGATCTGTCTTTTAGGAGCCAGGCATTGGCGCAGATATCTTTCCTTGCCGACCACTGGCTAGTTTTTTATTAAATTAGCTTGGGGTATCGGTAATTTTTTACTGTGAATAAATTAGAGTGTTCATGGCAGGCCGAAAGGGCTTAGATATCTCAGCATGGAATAATAGAATAGGACTTCAGGTTCTATTTTGTTGGTTTTTTGGAGCCGCAACTGCGAAAGCATCTGCCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAGGGGATCGAAGACGATTAGATACCGTCGTAGTCTTAACCATAAACTATGCCGACTGGGGATTGGTAGATGTATCAACGACAACTCTATCAGCACTCTATGAGAAATCAAAGTCTCTGGGTTCTGGGGGGAGTATGGTCGCAAGGCTG
+EUK_1238 TTCCAGCTCCAATAGCGTATACTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTCGAATTTCAGTTTTAAACTGCTATCTTGTTATAATTTATAATAAAGGTTAGGTGAGTTTAGAACTTATTTTGCTAATTTGAAAATTACCTCTTAATTGAGTATTTTAAAATTATGCATTTTTTACTGTGAACAAAATAGAGTGTTCATGGCAGGCCTTTAAGGCTTATATACCTCAGCATGGAATAATAGAGTAGGACTTCCGGTTCTATTTTATTGGTTATTGGAGCCCAACTGCGAAAGCATCTGCCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAGGGGATCGAAGACGATTAGATACCGTCGTAGTCTTAACCATAAACTATGCCGACTGGGGATTGGTAGATGTATCAAATACGACTCTATCAGTATCCTATGAGAAATCAAAGTCTCTGGGTTCTGGGGGGAGTATGGTCGCAAGGCTG
+EUK_1331 AACGGAGGGGGCACTCGTACTCCGTTGTCAGAGGTGAAATTCTAGGATTGACGGAAGACGAACAACTGCGAAAGCATCTGCCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAGGGGATCGAAGACGATTAGATACCGTCGTAGTCCTAACCATAAACTATGCCGACTGGGGATTGGTAGATGTACCAAAAACGACTCTATCAGCACCCTATGAGAAATCAAAGTCTTTGGGTTCTGGGGGGAGTATGGTCGCAAGGCTGAAACTTAAATAAATTGACGCAACTGCGAAAGCATCTGCCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAGGGGATCGAAGACGATTAGATACCGTCGTAGTCCTAACCATAAACTATGCCGACTGGGGATTGGTAGATGTACCAAAAACGACTCTATCAGCACCCTATGAGAAATCAAAGTCTTTGGGTTCTGGGGGGAGTATGGTCGCAAGGCTG
+EUK_1343 TTCCAGCTCCAATAGCGTATACTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTCGAATTTCAGTTCTAGATTGTTTCCTTGTTATGTATTATAATGTAGGATAAAACAGTTTAGAACTTTTTTTGTAAATTTATAAACATATTCTTCATTGAATTTTTATAAATATTGCAACTTTTACTGTGAACAAAATAGAGTGTTCATGGCAGGCCGTTATGGCTTATATACCTCAGCATGGAATAATAGAATAGGATTTCTGGTTCTATTTTATTGGTTATTGGAGCCCAACTGCGAAAGCATCTGCCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAGGGGATCGAAGACGATTAGATACCGTCGTAGTCTTAACCATAAACTATGCCGACTGGGGATTGGTAGATGAAACAAATACGACTCTATCAGTATCCTATGAGAAATCAAAGTCTCTGGGTTCTGGGGGGAGTATGGTCGCAAGGCTG
+EUK_1531 TTCCAGCTCCAATAGCGTATACTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTCGAATTTTAGTTTAAAACTGTTGCCTTGTTATGAATAGTAACATAGGATAAAACAATTTTGAACTTTGGTTGCTAATTTACGAAATGTTTCATCACTGAGCTTTTGTAAATTATGCATTTTTTACTGTGAACAAAATAGAGTGTTCATGGCAGGCCTTTAAGGCTTATATACCTCAGCATGGAATAATAGAGTAGGACTTCTGGTTCTATTTTATTGGTTATTGGAGCCCAACTGCGAAAGCATCTGCCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAGGGGATCGAAGACGATTAGATACCGTCGTAGTCTTAACCATAAACTATGCCGACTGGGGATTGGTAGATGTATCAAATACGACTCTATCAGTATCCTATGAGAAATCAAAGTCTCTGGGTTCTGGGGGGAGTATGGTCGCAAGGCTG</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>tax_df <span class="sc">%&gt;%</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Species <span class="sc">==</span> <span class="st">"Plagioselmis_lacustris"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code> [1] Domain      Supergroup  Division    Subdivision Class       Order      
+ [7] Family      Genus       Species     ASV         ASVseqs    
+&lt;0 rows&gt; (or 0-length row.names)</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>tax_df <span class="sc">%&gt;%</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Species <span class="sc">==</span> <span class="st">"Cryptomonas_curvata"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>            Domain Supergroup    Division   Subdivision         Class
+EUK_4    Eukaryota  Cryptista Cryptophyta Cryptophyta_X Cryptophyceae
+EUK_1399 Eukaryota  Cryptista Cryptophyta Cryptophyta_X Cryptophyceae
+EUK_1571 Eukaryota  Cryptista Cryptophyta Cryptophyta_X Cryptophyceae
+                   Order            Family       Genus             Species
+EUK_4    Cryptomonadales Cryptomonadales_X Cryptomonas Cryptomonas_curvata
+EUK_1399 Cryptomonadales Cryptomonadales_X Cryptomonas Cryptomonas_curvata
+EUK_1571 Cryptomonadales Cryptomonadales_X Cryptomonas Cryptomonas_curvata
+              ASV
+EUK_4       EUK_4
+EUK_1399 EUK_1399
+EUK_1571 EUK_1571
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ASVseqs
+EUK_4    TTCCAGCTCTAATAGCATATATTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTCGGATTTTGGGCGCGTGTGAACTGTCAGCCTCTGGTTGGACGGTGCGCGCGTGCCTTTCTGCTTGGGAGCCCCATGGTGGTTAATTCTGTCGTGGTGGGTCACAGGCCGTTTACTTTGAAAAAATTAGAGTGTTCAAAGCAGGCTGTTGCTTGAATAGATTAGCATGGAATAATGGAATAGGACCTTGGTGCTATTTCGTTGGTTATGGGACTGGGGTAATGATTAATAACTTGTGCGAAAGCATTCGGCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAGGGGATCGAAGACGATCAGATACCGTCGTAGTCTTAACCATAAACTATGCCAACTAGGGATCATTGAGTGTCAATTTACGACCTCATTGGCACCTTGTGAGAAATCAAAGTTTTTGGGTTCCGGGGGGAGTATGGTCGCAAGGCTG
+EUK_1399 TTCCAGCTCTAATAGCATATATTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTCGGATTTTGGGCGCGTGTGAACTGTCAGCCTCTGGTTGGACGGTGCGCGCGTGCCTTTCTGCTTGGGAGCCCCATGGTGGTTAATTCTGTCGTGGTGGGTCACAGGCCGTTTACTTTGAAAAACGATCAGATACCGTCGTAGTCTTAACCATAAACTATGCCAACTAGGGATCATTGAGTGTCAATTTACGACCTCATTGGCACCTTGTGAGAAATCAAAGTTTTTGGGTCTGCTTGGGAGCCCCATGGTGGTTAATTCTGTCGTGGTGGGTCACAGGCCGTTTACTTTGAAAAACGATCAGATACCGTCGTAGTCTTAACCATAAACTATGCCAACTAGGGATCATTGAGTGTCAATTTACGACCTCATTGGCACCTTGTGAGAAATCAAAGTTTTTGGGTTCCGGGGGGAGTATGGTCGCAAGGCTG
+EUK_1571 TTCCAGCTCTAATAGCATATATTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTCGGATTTTGGGCGCGTGTGAACTGTCAGCCTCTGGTTGGACGGTGCACGCGTGCCGTTCATATTTCGTTGTCAGAGGTGAAATTCTTGGATTTACGAACGATGAACTTGTGCGAAAGCATTCGGCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAGGGGATCGAAGACGATCAGATACCGTCGTAGTCTTAACCATAAACTATGCCAACTAGGGATCATTGAGTGTACTTGTGCGAAAGCATTCGGCAAGGATGTTTTCATTGATCAAGAACGAAAGTTAGGGGATCGAAGACGATCAGATACCGTCGTAGTCTTAACCATAAACTATGCCAACTAGGGATCATTGAGTGTCAATTTACGACCTCATTGGCACCTTGTGAGAAATCAAAGTTTTTGGGTTCCGGGGGGAGTATGGTCGCAAGGCTG</code></pre>
+</div>
+</div>
+<p>We’ll definitley remove the one bacteria, and probably the two which have an NA domain, but I’m unsure what to do about the nucleomorphs. I’m assuming they’ll make the tree look quite crazy (potentially interfering with downstream analyses). Are we also “counting” these species 2X then? Doesn’t seem so for the Plagioformis, but it does for the Cryptomonas species.</p>
+</section>
+<section id="remove-unnecessary-taxa" class="level1">
+<h1>Remove unnecessary taxa</h1>
+<p>We will need to remove the ASVs that are mitochondria or chloroplast</p>
+<section id="remove-control-samples" class="level2">
+<h2 class="anchored" data-anchor-id="remove-control-samples">Remove Control samples</h2>
+<p>Next, we will need to remove ASVs that seem to be contamination based on our controls. But guess what? None of our control samples survived with enough reads from either cutadapt or filterandTrim, so those samples are null.</p>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>control_samples <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"KH_D024"</span>, <span class="st">"KH_D048"</span>, <span class="st">"KH_D049"</span>, <span class="st">"KH_D050"</span>, <span class="st">"KH_D084"</span>, <span class="st">"KH_D085"</span>, <span class="st">"KH_D085"</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="fu">sample_names</span>(raw_euk_physeq) <span class="sc">%in%</span> control_samples</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code> [1] FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE
+[13] FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE
+[25] FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE
+[37] FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE
+[49] FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE
+[61] FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE
+[73] FALSE FALSE FALSE FALSE</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="evaluating-accuracy" class="level1">
+<h1>Evaluating Accuracy</h1>
+<p>I compare which ASVs I observe in our mock sequencing compared to which ASVs should be present</p>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Check the mock commmunity </span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>mock_physeq <span class="ot">&lt;-</span> raw_euk_physeq <span class="sc">%&gt;%</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">subset_samples</span>(.,(DNA_ID<span class="sc">==</span><span class="st">"ZYMO_MOCK"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">prune_taxa</span>(<span class="fu">taxa_sums</span>(.) <span class="sc">&gt;</span> <span class="dv">0</span>, .)</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="fu">tax_table</span>(mock_physeq)[,<span class="dv">1</span><span class="sc">:</span><span class="dv">9</span>] <span class="co"># Look at what taxa are there</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Taxonomy Table:     [2 taxa by 9 taxonomic ranks]:
+       Domain      Supergroup Division       Subdivision Class          
+EUK_20 "Eukaryota" "Obazoa"   "Opisthokonta" "Fungi"     "Ascomycota"   
+EUK_49 "Eukaryota" "Obazoa"   "Opisthokonta" "Fungi"     "Basidiomycota"
+       Order              Family              Genus         
+EUK_20 "Saccharomycotina" "Saccharomycetales" "Candida"     
+EUK_49 "Agaricomycotina"  "Tremellomycetes"   "Cryptococcus"
+       Species              
+EUK_20 "Candida_wounanorum" 
+EUK_49 "Cryptococcus_gattii"</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>otu_matrix <span class="ot">&lt;-</span> <span class="fu">otu_table</span>(mock_physeq) <span class="sc">%&gt;%</span> <span class="fu">as.matrix</span>() <span class="co"># Will use this matrix later</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"DADA2 inferred"</span>, <span class="fu">ntaxa</span>(mock_physeq), <span class="st">"ASVs present in the Mock Community."</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>DADA2 inferred 2 ASVs present in the Mock Community.</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Who are they in the mock community? </span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>mock_seqs <span class="ot">&lt;-</span> <span class="fu">tax_table</span>(mock_physeq) <span class="sc">%&gt;%</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(ASV, ASVseqs)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>We’re looking for Saccharomyces cerevisiae and Cryptococcus neoformans, which our classification at least doesn’t quite match. However when I blast both those sequences, I get those pieces as 100% hits, so I feel good about our error rate (zero, supposedly). Let’s remove the mock, non-Eukaryota domains, and save our new physeq.</p>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>preprocessed_physeq <span class="ot">&lt;-</span> raw_euk_physeq <span class="sc">%&gt;%</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">subset_taxa</span>(Domain <span class="sc">==</span> <span class="st">"Eukaryota"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">subset_samples</span>(.,(DNA_ID<span class="sc">!=</span><span class="st">"ZYMO_MOCK"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">prune_taxa</span>(<span class="fu">taxa_sums</span>(.) <span class="sc">&gt;</span> <span class="dv">0</span>, .) </span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>preprocessed_meta_physeq <span class="ot">&lt;-</span> </span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>  preprocessed_physeq <span class="sc">%&gt;%</span></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">subset_taxa</span>(Subdivision <span class="sc">==</span> <span class="st">"Metazoa"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">prune_samples</span>(<span class="fu">sample_sums</span>(.)<span class="sc">&gt;</span><span class="dv">0</span>, .)</span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>preprocessed_meta_physeq</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>phyloseq-class experiment-level object
+otu_table()   OTU Table:         [ 115 taxa and 70 samples ]
+sample_data() Sample Data:       [ 70 samples by 6 sample variables ]
+tax_table()   Taxonomy Table:    [ 115 taxa by 11 taxonomic ranks ]</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>preprocessed_euk_physeq <span class="ot">&lt;-</span> </span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  preprocessed_physeq <span class="sc">%&gt;%</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">subset_taxa</span>(Subdivision <span class="sc">!=</span> <span class="st">"Metazoa"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">prune_samples</span>(<span class="fu">sample_sums</span>(.)<span class="sc">&gt;</span><span class="dv">0</span>, .)</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>preprocessed_euk_physeq</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>phyloseq-class experiment-level object
+otu_table()   OTU Table:         [ 1455 taxa and 73 samples ]
+sample_data() Sample Data:       [ 73 samples by 6 sample variables ]
+tax_table()   Taxonomy Table:    [ 1455 taxa by 11 taxonomic ranks ]</code></pre>
+</div>
+</div>
+</section>
+<section id="save-preprocessed-phyloseq" class="level1">
+<h1>Save preprocessed phyloseq!</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="fu">save</span>(preprocessed_euk_physeq, <span class="at">file =</span> <span class="st">"data/03a_Eukaryotic_Errors_and_Contamination/preprocessed_euk_physeq.RData"</span>)</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="fu">save</span>(preprocessed_meta_physeq, <span class="at">file =</span> <span class="st">"data/03a_Eukaryotic_Errors_and_Contamination/preprocessed_meta_physeq.RData"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="session-information" class="level1">
+<h1>Session Information</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Reproducibility</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">session_info</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>─ Session info ───────────────────────────────────────────────────────────────
+ setting  value
+ version  R version 4.3.3 (2024-02-29)
+ os       Rocky Linux 9.4 (Blue Onyx)
+ system   x86_64, linux-gnu
+ ui       X11
+ language (EN)
+ collate  en_US.UTF-8
+ ctype    en_US.UTF-8
+ tz       America/New_York
+ date     2025-04-16
+ pandoc   3.1.1 @ /usr/lib/rstudio-server/bin/quarto/bin/tools/ (via rmarkdown)
+ quarto   1.3.450 @ /usr/lib/rstudio-server/bin/quarto/bin/quarto
+
+─ Packages ───────────────────────────────────────────────────────────────────
+ ! package              * version    date (UTC) lib source
+   abind                  1.4-8      2024-09-12 [1] RSPM (R 4.3.3)
+   ade4                   1.7-23     2025-02-14 [1] RSPM (R 4.3.3)
+   ape                    5.8-1      2024-12-16 [1] RSPM (R 4.3.3)
+   Biobase                2.62.0     2023-10-24 [1] Bioconductor
+   BiocGenerics         * 0.48.1     2023-11-01 [1] Bioconductor
+   BiocParallel           1.36.0     2023-10-24 [1] Bioconductor
+   biomformat             1.30.0     2023-10-24 [1] Bioconductor
+   Biostrings           * 2.70.3     2024-03-13 [1] Bioconductor 3.18 (R 4.3.3)
+   bitops                 1.0-9      2024-10-03 [1] RSPM (R 4.3.3)
+   cachem                 1.1.0      2024-05-16 [1] RSPM (R 4.3.3)
+   cli                    3.6.4      2025-02-13 [1] RSPM (R 4.3.3)
+ P cluster                2.1.6      2023-12-01 [?] CRAN (R 4.3.3)
+ P codetools              0.2-19     2023-02-01 [?] CRAN (R 4.3.3)
+   colorspace             2.1-1      2024-07-26 [1] RSPM (R 4.3.3)
+   crayon                 1.5.3      2024-06-20 [1] RSPM (R 4.3.3)
+   dada2                * 1.30.0     2023-10-24 [1] Bioconductor
+   data.table             1.17.0     2025-02-22 [1] RSPM (R 4.3.3)
+   DelayedArray           0.28.0     2023-10-24 [1] Bioconductor
+   deldir                 2.0-4      2024-02-28 [1] RSPM (R 4.3.3)
+ P devtools               2.4.5      2022-10-11 [?] CRAN (R 4.3.2)
+   digest                 0.6.37     2024-08-19 [1] RSPM (R 4.3.3)
+   dplyr                * 1.1.4      2023-11-17 [1] RSPM (R 4.3.3)
+ P ellipsis               0.3.2      2021-04-29 [?] CRAN (R 4.3.2)
+   evaluate               1.0.3      2025-01-10 [1] RSPM (R 4.3.3)
+   fastmap                1.2.0      2024-05-15 [1] RSPM (R 4.3.3)
+   forcats              * 1.0.0      2023-01-29 [1] RSPM (R 4.3.3)
+   foreach                1.5.2      2022-02-02 [1] RSPM (R 4.3.3)
+   fs                     1.6.5      2024-10-30 [1] RSPM (R 4.3.3)
+   generics               0.1.3      2022-07-05 [1] RSPM (R 4.3.3)
+   GenomeInfoDb         * 1.38.8     2024-03-15 [1] Bioconductor 3.18 (R 4.3.3)
+   GenomeInfoDbData       1.2.11     2025-04-11 [1] Bioconductor
+   GenomicAlignments      1.38.2     2024-01-16 [1] Bioconductor 3.18 (R 4.3.3)
+   GenomicRanges          1.54.1     2023-10-29 [1] Bioconductor
+   ggplot2              * 3.5.2      2025-04-09 [1] RSPM (R 4.3.3)
+   glue                   1.8.0      2024-09-30 [1] RSPM (R 4.3.3)
+   gtable                 0.3.6      2024-10-25 [1] RSPM (R 4.3.3)
+   hms                    1.1.3      2023-03-21 [1] RSPM (R 4.3.3)
+   htmltools              0.5.8.1    2024-04-04 [1] RSPM (R 4.3.3)
+ P htmlwidgets            1.6.4      2023-12-06 [?] CRAN (R 4.3.2)
+ P httpuv                 1.6.15     2024-03-26 [?] CRAN (R 4.3.2)
+   hwriter                1.3.2.1    2022-04-08 [1] RSPM (R 4.3.3)
+   igraph                 2.1.4      2025-01-23 [1] RSPM (R 4.3.3)
+   interp                 1.1-6      2024-01-26 [1] RSPM (R 4.3.3)
+   IRanges              * 2.36.0     2023-10-24 [1] Bioconductor
+   iterators              1.0.14     2022-02-05 [1] RSPM (R 4.3.3)
+   jpeg                   0.1-11     2025-03-21 [1] RSPM (R 4.3.3)
+   jsonlite               2.0.0      2025-03-27 [1] RSPM (R 4.3.3)
+   knitr                  1.50       2025-03-16 [1] RSPM (R 4.3.3)
+ P later                  1.4.2      2025-04-08 [?] RSPM (R 4.3.3)
+ P lattice                0.22-5     2023-10-24 [?] CRAN (R 4.3.3)
+   latticeExtra           0.6-30     2022-07-04 [1] RSPM (R 4.3.3)
+   lifecycle              1.0.4      2023-11-07 [1] RSPM (R 4.3.3)
+   lubridate            * 1.9.4      2024-12-08 [1] RSPM (R 4.3.3)
+   magrittr               2.0.3      2022-03-30 [1] RSPM (R 4.3.3)
+ P MASS                   7.3-60.0.1 2024-01-13 [?] CRAN (R 4.3.3)
+ P Matrix                 1.6-5      2024-01-11 [?] CRAN (R 4.3.3)
+   MatrixGenerics         1.14.0     2023-10-24 [1] Bioconductor
+   matrixStats            1.5.0      2025-01-07 [1] RSPM (R 4.3.3)
+   memoise                2.0.1      2021-11-26 [1] RSPM (R 4.3.3)
+ P mgcv                   1.9-1      2023-12-21 [?] CRAN (R 4.3.3)
+   microViz             * 0.12.7     2025-04-16 [1] https://david-barnett.r-universe.dev (R 4.3.3)
+   mime                   0.13       2025-03-17 [1] RSPM (R 4.3.3)
+ P miniUI                 0.1.1.1    2018-05-18 [?] CRAN (R 4.3.2)
+   multtest               2.58.0     2023-10-24 [1] Bioconductor
+   munsell                0.5.1      2024-04-01 [1] RSPM (R 4.3.3)
+ P nlme                   3.1-164    2023-11-27 [?] CRAN (R 4.3.3)
+ P pacman                 0.5.1      2019-03-11 [?] CRAN (R 4.3.2)
+   permute                0.9-7      2022-01-27 [1] RSPM (R 4.3.3)
+   phyloseq             * 1.46.0     2023-10-24 [1] Bioconductor
+   pillar                 1.10.2     2025-04-05 [1] RSPM (R 4.3.3)
+ P pkgbuild               1.4.7      2025-03-24 [?] RSPM (R 4.3.3)
+   pkgconfig              2.0.3      2019-09-22 [1] RSPM (R 4.3.3)
+ P pkgload                1.4.0      2024-06-28 [?] CRAN (R 4.3.2)
+   plyr                   1.8.9      2023-10-02 [1] RSPM (R 4.3.3)
+   png                    0.1-8      2022-11-29 [1] RSPM (R 4.3.3)
+ P profvis                0.4.0      2024-09-20 [?] CRAN (R 4.3.2)
+ P promises               1.3.2      2024-11-28 [?] CRAN (R 4.3.2)
+   purrr                * 1.0.4      2025-02-05 [1] RSPM (R 4.3.3)
+   R6                     2.6.1      2025-02-15 [1] RSPM (R 4.3.3)
+   RColorBrewer           1.1-3      2022-04-03 [1] RSPM (R 4.3.3)
+   Rcpp                 * 1.0.14     2025-01-12 [1] RSPM (R 4.3.3)
+   RcppParallel           5.1.10     2025-01-24 [1] RSPM (R 4.3.3)
+   RCurl                  1.98-1.17  2025-03-22 [1] RSPM (R 4.3.3)
+   readr                * 2.1.5      2024-01-10 [1] RSPM (R 4.3.3)
+ P remotes                2.5.0      2024-03-17 [?] CRAN (R 4.3.2)
+   renv                   1.0.3      2023-09-19 [1] CRAN (R 4.3.3)
+   reshape2               1.4.4      2020-04-09 [1] RSPM (R 4.3.3)
+   rhdf5                  2.46.1     2023-11-29 [1] Bioconductor 3.18 (R 4.3.3)
+   rhdf5filters           1.14.1     2023-11-06 [1] Bioconductor
+   Rhdf5lib               1.24.2     2024-02-07 [1] Bioconductor 3.18 (R 4.3.3)
+   rlang                  1.1.5      2025-01-17 [1] RSPM (R 4.3.3)
+   rmarkdown              2.29       2024-11-04 [1] RSPM (R 4.3.3)
+   Rsamtools              2.18.0     2023-10-24 [1] Bioconductor
+   rstudioapi             0.17.1     2024-10-22 [1] RSPM (R 4.3.3)
+   S4Arrays               1.2.1      2024-03-04 [1] Bioconductor 3.18 (R 4.3.3)
+   S4Vectors            * 0.40.2     2023-11-23 [1] Bioconductor 3.18 (R 4.3.3)
+   scales                 1.3.0      2023-11-28 [1] RSPM (R 4.3.3)
+ P sessioninfo            1.2.3      2025-02-05 [?] RSPM (R 4.3.3)
+ P shiny                  1.10.0     2024-12-14 [?] CRAN (R 4.3.2)
+   ShortRead              1.60.0     2023-10-24 [1] Bioconductor
+   SparseArray            1.2.4      2024-02-11 [1] Bioconductor 3.18 (R 4.3.3)
+   stringi                1.8.7      2025-03-27 [1] RSPM (R 4.3.3)
+   stringr              * 1.5.1      2023-11-14 [1] RSPM (R 4.3.3)
+   SummarizedExperiment   1.32.0     2023-10-24 [1] Bioconductor
+ P survival               3.5-8      2024-02-14 [?] CRAN (R 4.3.3)
+   tibble               * 3.2.1      2023-03-20 [1] RSPM (R 4.3.3)
+   tidyr                * 1.3.1      2024-01-24 [1] RSPM (R 4.3.3)
+   tidyselect             1.2.1      2024-03-11 [1] RSPM (R 4.3.3)
+   tidyverse            * 2.0.0      2023-02-22 [1] RSPM (R 4.3.3)
+   timechange             0.3.0      2024-01-18 [1] RSPM (R 4.3.3)
+   tzdb                   0.5.0      2025-03-15 [1] RSPM (R 4.3.3)
+ P urlchecker             1.0.1      2021-11-30 [?] CRAN (R 4.3.2)
+ P usethis                3.1.0      2024-11-26 [?] CRAN (R 4.3.2)
+   vctrs                  0.6.5      2023-12-01 [1] RSPM (R 4.3.3)
+   vegan                  2.6-10     2025-01-29 [1] RSPM (R 4.3.3)
+   withr                  3.0.2      2024-10-28 [1] RSPM (R 4.3.3)
+   xfun                   0.52       2025-04-02 [1] RSPM (R 4.3.3)
+ P xtable                 1.8-4      2019-04-21 [?] CRAN (R 4.3.2)
+   XVector              * 0.42.0     2023-10-24 [1] Bioconductor
+   yaml                   2.3.10     2024-07-26 [1] RSPM (R 4.3.3)
+   zlibbioc               1.48.2     2024-03-13 [1] Bioconductor 3.18 (R 4.3.3)
+
+ [1] /local/workdir/arp277/AAM_ERI_2024/renv/library/R-4.3/x86_64-pc-linux-gnu
+ [2] /home/arp277/.cache/R/renv/sandbox/R-4.3/x86_64-pc-linux-gnu/fd835031
+
+ * ── Packages attached to the search path.
+ P ── Loaded and on-disk path mismatch.
+
+──────────────────────────────────────────────────────────────────────────────</code></pre>
+</div>
+</div>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>

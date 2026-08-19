@@ -1,0 +1,47 @@
+This is cutadapt 3.2 with Python 3.8.6
+Command line parameters: --no-indels --revcomp --rename={header} --pair-filter=any --error-rate=0.2 --discard-untrimmed -g ^GTGYCAGCMGCCGCGGTAA -G ^CCGYCAATTYMTTTRAGTTT -o data/mcnichol-trimmed/Plate01_A01_KH_D001_10480167_AAGJLJNM5.R1.trimmed.fastq -p data/mcnichol-trimmed/Plate01_A01_KH_D001_10480167_AAGJLJNM5.R2.trimmed.fastq data/raw_gzipped_fastqs_symlinks/Plate01_A01_KH_D001_10480167_AAGJLJNM5_R1.fastq.gz data/raw_gzipped_fastqs_symlinks/Plate01_A01_KH_D001_10480167_AAGJLJNM5_R2.fastq.gz
+Run "cutadapt --help" to see command-line options.
+See https://cutadapt.readthedocs.io/ for full documentation.
+
+cutadapt: error: --revcomp not implemented for paired-end reads
+This is cutadapt 3.2 with Python 3.8.6
+Command line parameters: --no-indels --pair-filter=any --error-rate=0.2 --discard-untrimmed -g ^GTGYCAGCMGCCGCGGTAA -G ^CCGYCAATTYMTTTRAGTTT -o data/mcnichol-trimmed/Plate01_A01_KH_D001_10480167_AAGJLJNM5.R1.trimmed.fastq -p data/mcnichol-trimmed/Plate01_A01_KH_D001_10480167_AAGJLJNM5.R2.trimmed.fastq data/raw_gzipped_fastqs_symlinks/Plate01_A01_KH_D001_10480167_AAGJLJNM5_R1.fastq.gz data/raw_gzipped_fastqs_symlinks/Plate01_A01_KH_D001_10480167_AAGJLJNM5_R2.fastq.gz
+Processing reads on 1 core in paired-end mode ...
+Finished in 3.35 s (13 µs/read; 4.64 M reads/minute).
+
+=== Summary ===
+
+Total read pairs processed:            259,490
+  Read 1 with adapter:                 247,403 (95.3%)
+  Read 2 with adapter:                 253,292 (97.6%)
+Pairs written (passing filters):       244,266 (94.1%)
+
+Total basepairs processed:   156,212,980 bp
+  Read 1:    78,106,490 bp
+  Read 2:    78,106,490 bp
+Total written (filtered):    137,521,758 bp (88.0%)
+  Read 1:    68,883,012 bp
+  Read 2:    68,638,746 bp
+
+=== First read: Adapter 1 ===
+
+Sequence: GTGYCAGCMGCCGCGGTAA; Type: anchored 5'; Length: 19; Trimmed: 247403 times
+
+No. of allowed errors:
+1-4 bp: 0; 5-9 bp: 1; 10-14 bp: 2; 15-19 bp: 3
+
+Overview of removed sequences
+length	count	expect	max.err	error counts
+19	247403	0.0	3	229288 15408 1658 1049
+
+
+=== Second read: Adapter 2 ===
+
+Sequence: CCGYCAATTYMTTTRAGTTT; Type: anchored 5'; Length: 20; Trimmed: 253292 times
+
+No. of allowed errors:
+1-4 bp: 0; 5-9 bp: 1; 10-14 bp: 2; 15-19 bp: 3; 20 bp: 4
+
+Overview of removed sequences
+length	count	expect	max.err	error counts
+20	253292	0.0	4	237753 10560 1680 1526 1773

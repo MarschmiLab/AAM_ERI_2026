@@ -1,0 +1,1488 @@
+---
+title: "Looking at Cyano Species Distributions" 
+author: "Augustus Pendleton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+knitr: 
+  opts_chunk: 
+    fig.path: ../figures/10_Cyano_Species_Distribution/
+editor_options: 
+  chunk_output_type: console
+---
+
+# Goals of this document
+
+# Load Data and Packages
+
+```{r load-packages}
+
+pacman::p_load(phyloseq, vegan, patchwork, tidyverse)
+
+source("code/R/plotting_aesthetics.R")
+
+load("data/08_Beta_Diversity/trim_physeq.RData")
+
+load("data/08_Beta_Diversity/abs_physeq.RData")
+
+cyano_physeq <- 
+  trim_physeq %>%
+  prune_taxa(taxa_sums(.) > 0, .) %>%
+  subset_taxa(., Phylum == "p__Cyanobacteriota")
+
+cyano_melted <- cyano_physeq %>%
+  psmelt() %>%
+  filter(Depth_Class == "S")
+
+asv_ids <- cyano_melted %>%
+  select(ASV, Genus) %>%
+  unique()
+
+```
+
+
+
+```{r}
+
+sum_cyanos <- cyano_melted %>%
+  filter(!is.na(Genus)) %>%
+  group_by(Genus) %>%
+  summarize(Max_Abund = max(Abundance),
+            Median_Abund = median(Abundance),
+            N_ASV = length(unique(ASV)),
+            Prevalence = sum(Abundance > 0)/n()) %>%
+  ungroup()
+
+sum_cyanos %>%
+  slice_max(n = 20, order_by = Max_Abund) %>%
+  arrange(desc(Max_Abund))
+
+sum_cyanos_asv <- cyano_melted %>%
+  filter(!is.na(Genus)) %>%
+  group_by(Month, Genus, ASV) %>%
+  summarize(Total_Abund = sum(Abundance),
+            Max_Abund = max(Abundance),
+            Median_Abund = median(Abundance),
+            Prevalence = sum(Abundance > 0)/n()) %>%
+  ungroup()
+
+sum_cyanos_asv %>%
+  group_by(Month) %>%
+  slice_max(n = 100, order_by = Total_Abund) %>%
+  arrange(desc(Total_Abund)) %>%
+  filter(Total_Abund > 1000)
+
+sum_cyanos_asv %>%
+  slice_max(n = 100, order_by = Total_Abund) %>%
+  arrange(desc(Total_Abund)) %>%
+  count(Genus)
+
+sum_cyanos_asv %>%
+  slice_max(n = 50, order_by = Max_Abund) %>%
+  arrange(desc(Max_Abund)) %>%
+  count(Genus)
+
+sum_cyanos_asv %>%
+  slice_max(n = 100, order_by = Max_Abund) %>%
+  arrange(desc(Max_Abund)) %>%
+  mutate(index = c(1:100)) %>%
+  ggplot(aes(x = index, y = Max_Abund)) + 
+  geom_line()  
+  
+  sum_cyanos_asv %>%
+  slice_max(n = 100, order_by = Max_Abund) %>%
+  arrange(desc(Median_Abund)) %>%
+  mutate(index = c(1:100)) %>%
+  ggplot(aes(x = index, y = Median_Abund)) + 
+  geom_line()  
+  
+  sum_cyanos_asv %>%
+  slice_max(n = 100, order_by = Max_Abund) %>%
+  arrange(desc(Prevalence)) %>%
+  mutate(index = c(1:100)) %>%
+  ggplot(aes(x = index, y = Prevalence)) + 
+  geom_line() 
+  
+```
+
+```{r}
+
+top_cyano_asvs <- sum_cyanos_asv %>%
+  group_by(Month) %>%
+  slice_max(n = 100, order_by = Total_Abund) %>%
+  ungroup() %>%
+  group_by(Month, Genus) %>%
+  filter(Total_Abund > 10000, Prevalence > 0.5) %>%
+  ungroup() %>%
+  nest_by(Month) %>%
+  mutate(ASVs = list(pull(data, ASV))) %>%
+  select(-data)
+
+top_cyano_asvs
+
+```
+
+
+
+
+## Species Co-correlation
+
+Two separate goals: 
+
+Square network graph of correlations between major cyanos
+
+Bipartite network of 1000 most abundant ASVs to major cyanos
+
+```{r}
+
+
+
+top_cyano_asvs <- cyano_melted %>%
+  filter(Month != "May") %>%
+  group_by(ASV) %>%
+  summarize(Total_Abund = sum(Abundance),
+            Prevalence = sum(Abundance > 0) / n()) %>%
+  filter(Prevalence > 0.25) %>%
+  slice_max(n = 100, order_by = Total_Abund)
+
+top_cyano_asvs %>%
+  ggplot(aes(x = Prevalence, y = Total_Abund)) + 
+  geom_point() + 
+  scale_y_log10()
+
+
+abs_melted <- 
+  abs_physeq %>%
+  psmelt() %>%
+  filter(Depth_Class == "S", DNA_ID != "KH_D076", Month != "May",
+         !ASV %in% top_cyano_asvs)
+
+abs_melted %>%
+  group_by(ASV) %>%
+  summarize(Total_Abund = sum(Abundance)) %>%
+  arrange(Total_Abund) %>%
+  mutate(index = seq(1:nrow(.))) %>%
+  ggplot(aes(x = index, y = Total_Abund)) + 
+  geom_line() +
+  scale_y_log10()
+
+
+abs_melted %>%
+  group_by(ASV) %>%
+  summarize(Total_Abund = sum(Abundance),
+            Prevalence = sum(Abundance > 0)/n()) %>%
+  filter(Prevalence > 0.25) %>%
+  slice_max(n = 1000, order_by = Total_Abund) %>%
+  ggplot(aes(x = Prevalence, y = Total_Abund)) + 
+  geom_point() + 
+  scale_y_log10()
+
+
+top_asvs <- 
+  abs_melted %>%
+  group_by(ASV) %>%
+  summarize(Total_Abund = sum(Abundance),
+            Prevalence = sum(Abundance > 0)/n()) %>%
+  filter(Prevalence > 0.25) %>%
+  slice_max(n = 1000, order_by = Total_Abund) %>%
+  pull(ASV)
+
+
+wide_cy <- 
+  cyano_melted %>%
+  filter(ASV %in% top_cyano_asvs$ASV) %>%
+  select(ASV, Rep_ID, Abundance) %>%
+  pivot_wider(names_from = ASV, values_from = Abundance)
+
+prok_names <- colnames(wide_cy)[-1]
+
+cy_cor_res <- cyano_melted %>%
+  filter(ASV %in% top_cyano_asvs$ASV) %>%
+  select(ASV, Rep_ID, Abundance) %>%
+  pivot_wider(names_from = ASV, values_from = Abundance) %>%
+  rstatix::cor_test(vars = prok_names)
+
+```
+
+```{r Figure4a, fig.width = 8, fig.height = 6}
+
+library(ggraph)
+library(igraph)
+library(tidygraph)
+# High correlation
+cy_cor_mat <- 
+  cy_cor_res %>%
+  mutate(cor = ifelse(cor>=0.8&p<0.01, cor, 0)) %>%
+  select(var1, var2, cor) %>%
+  pivot_wider(names_from = var2, values_from = cor) %>%
+  column_to_rownames("var1") %>%
+  as.matrix()
+
+
+adj_mat <- igraph::graph_from_adjacency_matrix(cy_cor_mat, weighted=T, mode="undirected", diag=F)
+
+graph <- as_tbl_graph(adj_mat) %>%
+  left_join(asv_ids, by = c("name" = "ASV")) %>%
+  left_join(top_cyano_asvs, by = c("name" = "ASV")) %>%
+  #filter(!is.na(Genus)) %>%
+  mutate(Centrality = centrality_degree(mode = 'in'),
+         Genus = str_remove(Genus, "g__"),
+         Genus = ifelse(is.na(Genus), "(Rare/Unknown)", Genus),
+         Genus = ifelse(Total_Abund < 50000, "(Rare/Unknown)", Genus),
+         Genus = factor(Genus, levels = names(cyano_genus_colors))
+  )
+
+
+set.seed(314)
+ggraph(graph, layout = "fr")+ 
+    geom_edge_fan(aes(alpha = weight), show.legend = FALSE, linewidth = 1) + 
+    geom_node_point(aes(color = Genus, size = Total_Abund)) + 
+  scale_size_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
+    scale_color_manual(values = cyano_genus_colors) + 
+  guides(color = guide_legend(override.aes = list(size = 5))) + 
+  labs(size = "Total Abundance\n(cells/ml)") + 
+  theme(legend.title = element_text(size = 12),
+        legend.position = "left")
+
+ggsave(filename = "figures/10_Cyano_Species_Distribution/Fig6_A.png", dpi = 300, height = 6, width = 8)
+
+
+clustered <- igraph::cluster_edge_betweenness(graph)
+
+members <- igraph::membership(clustered) 
+
+mem_df <- data.frame(name = names(members),
+                     membership = members)
+
+top_mem<- 
+  mem_df %>%
+  count(membership) %>%
+  slice_max(n = 3, order_by = n) %>%
+  pull(membership)
+
+good_mem_df <- 
+  mem_df %>%
+  mutate(membership = ifelse(membership %in% top_mem, membership, NA),
+         membership = factor(membership, labels = c(1:4)))
+
+mem_graph <- 
+  graph %>%
+  left_join(good_mem_df)
+  
+
+set.seed(314)
+ggraph(mem_graph, layout = "fr")+ 
+    geom_edge_fan(aes(alpha = weight), show.legend = FALSE) + 
+    geom_node_point(aes(color = membership, size = Total_Abund)) + 
+  guides(color = guide_legend(override.aes = list(size = 5)),
+         size = guide_none())
+
+mem_asvs <- good_mem_df %>%
+  filter(!is.na(membership)) %>%
+  rename(ASV = name) %>%
+  filter(membership %in% c(1,2,3))
+
+```
+
+Okay, let's look at the composition of those clusters
+
+
+```{r Figure4b, fig.width = 6, fig.height = 6}
+
+top_cyano_asvs %>%
+  left_join(mem_asvs) %>%
+  filter(!is.na(membership)) %>%
+  left_join(asv_ids) %>%
+  mutate(Genus = str_remove(Genus, "g__"),
+         Genus = ifelse(is.na(Genus), "(Rare/Unknown)", Genus),
+         Genus = ifelse(Total_Abund < 100, "(Rare/Unknown)", Genus)) %>%
+  ggplot(aes(y = membership, x = Total_Abund, fill = Genus)) +
+  geom_col() + 
+  scale_fill_manual(values = cyano_genus_colors)
+
+save(cyano_melted, file = "data/10_Cyano_Species_Distribution/cyano_melted.RData")
+save(mem_asvs, file = "data/10_Cyano_Species_Distribution/mem_asvs.RData")
+
+pacman::p_load(sf, terra, tmap, gstat, install = FALSE)
+
+# Define some shapes and objects
+
+raw_erie <- read_sf("data/spatial_imports/hydro_p_LakeErie/hydro_p_LakeErie.shp") %>%
+  st_transform(crs = "EPSG:4326")
+
+erie_outline <- raw_erie %>%
+  st_union()
+
+mem_cy_sf <- 
+  cyano_melted %>%
+  select(Rep_ID, Abundance, ASV, Latitude, Longitude, Month) %>%
+  left_join(mem_asvs) %>%
+  filter(!is.na(membership)) %>%
+  group_by(Rep_ID, Month, Latitude, Longitude, membership) %>%
+  summarize(mem_abund = sum(Abundance)) %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  st_as_sf(coords = c("Longitude","Latitude"), crs = "EPSG:4326")
+  
+
+mem_cy_sf %>%
+  dplyr::filter(Month != "May") %>%
+  mutate(membership = factor(membership, levels = c(2,1,3))) %>%
+  ggplot() +
+    geom_sf(data = erie_outline, fill = NA) +
+  geom_sf(aes(size = mem_abund, color = mem_abund), alpha = 1) + 
+  facet_grid(membership~Month)+
+  scale_color_distiller(palette = "Spectral", limits = c(0,1.6e6), breaks = c(0, 0.5e6, 1e6, 1.5e6)) + 
+  scale_size_continuous(limits = c(0,1.6e6), breaks = c(0, 0.5e6, 1e6, 1.5e6)) + 
+  labs(color = "Cluster\nAbundance\n(cells/ml)", size = "Cluster\nAbundance\n(cells/ml)") +
+  guides(color= guide_legend(), size=guide_legend()) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text.y = element_blank(),
+        legend.title = element_text(size = 12),
+        strip.text = element_text(size = 12))
+
+#ggsave(filename = "test.png", width = 6, height= 6, dpi = 300)
+
+```
+
+```{r Figure4b_leftovers}
+
+mem_cy_sf %>%
+  ggplot() +
+  geom_sf(aes(size = mem_abund, color = mem_abund), alpha = 1) + 
+  facet_grid(membership~Month)+
+  scale_color_distiller(palette = "Spectral") + 
+  geom_sf(data = erie_outline, fill = NA) 
+
+
+mem_cy_sf %>%
+  ungroup() %>%
+  group_by(membership) %>%
+  mutate(rel_abund = mem_abund / sum(mem_abund)) %>%
+  filter(Month != "May") %>%
+  ggplot() +
+  geom_sf(aes(size = rel_abund, color = rel_abund), alpha = 1) + 
+  facet_grid(membership~Month)+
+  scale_color_distiller(palette = "Spectral") + 
+  geom_sf(data = erie_outline, fill = NA) 
+
+```
+
+```{r FigureSupp_Mod_CyNetwork, fig.width = 6, fig.height = 3}
+
+corrs <- seq(from = 0.5, to = 0.95, by = 0.05)
+
+names(corrs) <- corrs
+
+graphs <- map(corrs, \(x){
+  cy_cor_mat <- 
+  cy_cor_res %>%
+  mutate(cor = ifelse(cor>=x&p<0.01, cor, 0)) %>%
+  select(var1, var2, cor) %>%
+  pivot_wider(names_from = var2, values_from = cor) %>%
+  column_to_rownames("var1") %>%
+  as.matrix()
+  
+  adj_mat <- igraph::graph_from_adjacency_matrix(cy_cor_mat, weighted=T, mode="undirected", diag=F)
+  
+  graph <- as_tbl_graph(adj_mat)
+})
+
+map(graphs, igraph::degree) %>%
+  bind_rows(.id = "Corr_Threshold") %>%
+  pivot_longer(!Corr_Threshold, names_to = "ASV", values_to = "Degree") %>%
+  ggplot(aes(x = as.numeric(Corr_Threshold), y = Degree)) + 
+  ggbeeswarm::geom_beeswarm() + 
+  geom_smooth(formula = y~log(x), method = "lm")
+
+
+mods <- map(graphs, \(x){
+  clustered <- igraph::cluster_edge_betweenness(x)
+  
+  igraph::modularity(clustered)
+
+  }) %>%
+  unlist() 
+
+data.frame(Corr = corrs,
+           Modularity = mods) %>%
+  ggplot(aes(x = corrs, y = Modularity)) + 
+  geom_line() + 
+  geom_point(size = 4) + 
+  labs(x = "Minimum Correlation")
+
+map(graphs, \(x){
+  igraph::clique_num(x)
+}) %>% unlist()
+
+cy_dens <- map(graphs, \(x){
+  igraph::edge_density(x)
+})
+
+
+```
+
+# Correlating Cyano Abund vs. Heterotroph Abund
+
+# Going by Clusters
+
+```{r Figure6a_b, fig.width = 10, fig.height = 4}
+
+nc_physeq <- abs_physeq %>%
+  subset_taxa(., Phylum != "p__Cyanobacteriota")
+alpha_diversity <- estimate_richness(nc_physeq, measure = c("Shannon", "Observed"))
+alpha_diversity
+H <- alpha_diversity$Shannon
+S1 <- alpha_diversity$Observed
+S <- log(S1)
+alpha_diversity$evenness <- H/S
+
+alpha_diversity <- alpha_diversity %>%
+  rownames_to_column("DNA_ID") %>%
+  select(DNA_ID, evenness)
+
+mem_cy_abunds <- 
+  cyano_melted %>%
+  select(DNA_ID, Abundance, ASV) %>%
+  left_join(mem_asvs) %>%
+  filter(!is.na(membership)) %>%
+  group_by(DNA_ID, membership) %>%
+  summarize(Mem_Abund = sum(Abundance)) 
+
+total_cy_stats <-  cyano_melted %>%
+  filter(Abundance > 0) %>%
+  group_by(DNA_ID) %>%
+  summarize(Mem_Abund = sum(Abundance)) %>%
+  mutate(membership = "Total")
+
+cy_stats <- cyano_melted %>%
+  filter(Abundance > 0) %>%
+  group_by(DNA_ID) %>%
+  summarize(Cy_Richness = n(),
+            Cy_Abundance = sum(Abundance)) 
+
+all_cy_stats <- rbind(mem_cy_abunds, total_cy_stats) %>%
+  left_join(cy_stats)
+
+joined <- 
+  abs_physeq %>%
+  sample_data() %>%
+  data.frame() %>%
+  filter(Depth_Class == "S", DNA_ID != "KH_D076", Month != "May") %>% 
+  left_join(all_cy_stats) %>% 
+  left_join(alpha_diversity)
+
+
+joined %>%
+  mutate(Month = factor(Month, levels = c("May","August","September")),
+         membership = factor(membership, levels = c("Total", "2","1","3"),
+                             labels = c("Total","C1: Microcystis","C2: Pseudanabaena", "C3: Cyanobium"))) %>%
+  ggplot(aes(x = Mem_Abund, y =   Richness-Cy_Richness)) + 
+  geom_point(aes(color = Month)) + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", 
+                   cor.coef.name = "rho",
+                   p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) + 
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
+  facet_wrap(~membership, scale = "free_x", nrow = 1) + 
+  theme(legend.position = "right", 
+        aspect.ratio = 1,
+        axis.text = element_text(size = 8)) + 
+  labs(x = "Cyano Abundance/mL", y = "Heterotroph\nRichness") 
+
+joined %>%
+  mutate(Month = factor(Month, levels = c("May","August","September")),
+         membership = factor(membership, levels = c("Total", "2","1","3"),
+                             labels = c("Total","C1: Microcystis","C2: Pseudanabaena", "C3: Cyanobium"))) %>%
+  ggplot(aes(x = Mem_Abund, y =   evenness)) + 
+  geom_point(aes(color = Month)) + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", 
+                   cor.coef.name = "rho",
+                   p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) + 
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
+  facet_wrap(~membership, scale = "free_x", nrow = 1) + 
+  theme(legend.position = "right", 
+        aspect.ratio = 1,
+        axis.text = element_text(size = 8)) + 
+  labs(x = "Cyano Abundance/mL", y = "Hetertroph\nEvenness") 
+
+joined %>%
+  mutate(Month = factor(Month, levels = c("May","August","September")),
+         membership = factor(membership, levels = c("Total", "2","1","3"),
+                             labels = c("Total","C1: Microcystis","C2: Pseudanabaena", "C3: Cyanobium"))) %>%
+  ggplot(aes(x = Mem_Abund, y =   avg_cells_per_ml-Cy_Abundance)) + 
+  geom_point(aes(color = Month)) + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", 
+                   cor.coef.name = "rho",
+                   p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) + 
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
+  facet_wrap(~membership, scale = "free_x", nrow = 1) + 
+  theme(legend.position = "right", 
+        aspect.ratio = 1,
+        axis.text = element_text(size = 8)) + 
+  labs(x = "Cyano Abundance/mL", y = "Heterotroph\nAbundance/mL") 
+
+
+
+
+
+```
+
+Alternative: r and p-value heat map
+
+```{r Figure6_Heatmap, fig.width = 8, fig.height = 5}
+
+joined %>%
+  mutate(het_abund = avg_cells_per_ml - Cy_Abundance,
+         het_rich = Richness - Cy_Richness,
+         het_even = evenness,
+         het_rsg = het_rsg_per_ml,
+         het_rsg_perc = het_rsg_perc_pos) %>%
+  select(membership, Mem_Abund,het_abund, het_rich, het_even, het_rsg, het_rsg_perc) %>%
+  group_by(membership) %>%
+  rstatix::cor_test(vars = Mem_Abund, vars2 = starts_with("het"), method = "spearman", use = "pairwise.complete.obs") %>%
+  rstatix::adjust_pvalue() %>%
+  mutate(var2 = factor(var2, levels = c("het_rsg_perc","het_rsg","het_abund","het_even","het_rich"),
+                       labels = c("% RSG +", "Total RSG+", "Abundance","Evenness","Richness")),
+         membership = factor(membership, levels = c("Total", "2","1","3"),
+                             labels = c("Total","C1: Microcystis","C2: Pseudanabaena", "C3: Cyanobium"))) %>%
+  ggplot(aes(x = membership, y = var2, fill = cor, alpha = p.adj < 0.05)) + 
+  geom_tile() + 
+  geom_text(aes(label = round(cor, 2))) + 
+  scale_fill_distiller(palette = "Spectral") + 
+  scale_alpha_manual(values = c(0.4,1)) + 
+  scale_y_discrete(expand = expansion(0)) + 
+  scale_x_discrete(expand = expansion(0)) + 
+  guides(alpha = "none") + 
+  labs(y="Non-Cyano Metric",
+       fill = "Spearman's R")+
+  theme(axis.title.x = element_blank(),
+        axis.line = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.x = element_text(angle = 330, vjust = 1, hjust = 0, size = 12))
+
+ggsave("test.png", width = 8, height = 5)
+
+```
+
+```{r Figure6_Env_Heatmap, fig.width = 6, fig.height = 5}
+
+joined %>%
+  filter(Month == "September", membership == "Total") %>%
+  rstatix::cor_test(rsg_pos_per_ml, ctd_temperature, method = "spearman", use = "pairwise.complete.obs")
+
+joined %>%
+  filter(membership == "Total") %>%
+  mutate(het_abund = avg_cells_per_ml - Cy_Abundance,
+         het_rich = Richness - Cy_Richness,
+         het_even = evenness,
+         het_rsg = het_rsg_per_ml,
+         het_rsg_perc = het_rsg_perc_pos,
+         tn_ratio = (tn_ug_n_l/14) / (tp_ug_p_l/31)) %>%
+  select(ctd_temperature, tn_ug_n_l, tp_ug_p_l, tn_ratio, het_abund, het_rich, het_even, het_rsg, het_rsg_perc) %>%
+  pivot_longer(ctd_temperature:tn_ratio, names_to = "Chem", values_to = "Value") %>%
+  group_by(Chem) %>%
+  rstatix::cor_test(vars = Value, vars2 = starts_with("het"), method = "spearman", use = "pairwise.complete.obs") %>%
+  rstatix::adjust_pvalue() %>% 
+  mutate(var2 = factor(var2, levels = c("het_rsg_perc","het_rsg","het_abund","het_even","het_rich"),
+                       labels = c("% RSG +", "RSG+ /mL", "Abundance","Evenness","Richness")),
+         Chem = factor(Chem, levels = c("ctd_temperature", "tn_ug_n_l","tp_ug_p_l","tn_ratio"),
+                       labels = c("Temperature","Total N","Total P","Molar N:P"))) %>%
+  ggplot(aes(x = Chem, y = var2, fill = cor, alpha = p.adj < 0.05)) + 
+  geom_tile() + 
+  geom_text(aes(label = round(cor, 2))) + 
+  scale_fill_distiller(palette = "Spectral") + 
+  scale_alpha_manual(values = c(0.2,1)) + 
+  scale_y_discrete(expand = expansion(0)) + 
+  scale_x_discrete(expand = expansion(0)) + 
+  guides(alpha = "none") + 
+  labs(y="Non-Cyano Metric",
+       fill = "Spearman's R")+
+  theme(axis.title.x = element_blank(),
+        axis.line = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.x = element_text(angle = 330, vjust = 1, hjust = 0, size = 12))
+
+ggsave("test.png", width = 8, height = 5)
+
+```
+
+```{r TP-to-Cyanos, fig.width = 10, fig.height = 4}
+
+flow_sf %>%
+  select(doc_mg_c_l, avg_cells_per_ml) %>%
+  unique() %>%
+  rstatix::cor_test(avg_cells_per_ml, doc_mg_c_l, method = "spearman")
+
+joined %>%
+  mutate( membership = factor(membership, levels = c("Total", "2","1","3"),
+                             labels = c("Total","C1: Microcystis","C2: Pseudanabaena", "C3: Cyanobium"))) %>%
+  ggplot(aes(x = tp_ug_p_l, y = Mem_Abund)) + 
+  geom_point(aes(color = Month)) + 
+  facet_wrap(~membership, nrow = 1) + 
+  scale_y_log10(labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", 
+                   cor.coef.name = "rho",
+                   p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) +
+  labs(y = "Cyano Cluster Abundance/mL", x = "TP (ug P/L)") +
+  theme(legend.position = "right", 
+        aspect.ratio = 1,
+        axis.text = element_text(size = 8))
+
+ggsave("test.png", width = 6, height = 5)
+```
+
+
+
+```{r old_Figure6a_b, fig.width = 8, fig.height = 6}
+
+
+
+
+joined %>%
+  filter(membership=="Total") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot(aes(x = Cy_Richness, y =   Richness-Cy_Richness, color = Month)) + 
+  geom_point() + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", 
+                   cor.coef.name = "rho",
+                   p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) + 
+  facet_wrap(~Month) + 
+  theme(legend.position = "none", 
+        aspect.ratio = 1) + 
+  labs(x = "Cyano Richness", y = "Heterotroph\nRichness") 
+
+joined %>%
+  filter(membership=="Total") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot(aes(x = Cy_Abundance/1e6, y =  (avg_cells_per_ml - Cy_Abundance)/1e6, color = Month)) + 
+  geom_point() + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", cor.coef.name = "rho",
+                   p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) + 
+  facet_wrap(~Month) + 
+  theme(legend.position = "none",
+        aspect.ratio = 1) + 
+  labs(x = "Cyano Abundance (million cells/ml)", y = "Heterotroph Abundance\n(million cells/ml)")
+
+
+ggsave(filename = "test.png", width = 8, height = 6)
+
+
+
+```
+
+
+```{r Figure6c, fig.width = 10, fig.height = 4}
+
+joined %>%
+  filter(membership=="Total") %>%
+ filter(Month == "September") %>%
+  mutate(
+         membership = factor(membership, levels = c("Total", "2","1","3"),
+                             labels = c("Total","C1: Microcystis","C2: Pseudanabaena", "C3: Cyanobium"))) %>%
+  ggplot(aes(x = Mem_Abund, y =   rsg_pos_per_ml)) + 
+  geom_point(aes(color = Month)) + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", 
+                   cor.coef.name = "rho",
+                   p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) + 
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
+  facet_wrap(~membership, scale = "free_x", nrow = 1) + 
+  theme(legend.position = "right", 
+        aspect.ratio = 1,
+        axis.text = element_text(size = 8)) + 
+  labs(x = "Cyano Abundance/mL", y = "RSG + / mL\n") 
+
+joined %>%
+  filter(membership=="Total") %>%
+  filter(Month == "September") %>%
+  mutate(
+         membership = factor(membership, levels = c("Total", "2","1","3"),
+                             labels = c("Total","C1: Microcystis","C2: Pseudanabaena", "C3: Cyanobium"))) %>%
+  ggplot(aes(x = Mem_Abund, y =   rsg_perc_pos)) + 
+  geom_point(aes(color = Month)) + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", 
+                   cor.coef.name = "rho",
+                   p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) + 
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
+  facet_wrap(~membership, scale = "free_x", nrow = 1) + 
+  theme(legend.position = "right", 
+        aspect.ratio = 1,
+        axis.text = element_text(size = 8)) + 
+  labs(x = "Cyano Abundance/mL", y = "% RSG +\n") 
+
+
+joined %>%
+  filter(membership=="Total") %>%
+ filter(Month == "September") %>%
+  mutate(
+         membership = factor(membership, levels = c("Total", "2","1","3"),
+                             labels = c("Total","C1: Microcystis","C2: Pseudanabaena", "C3: Cyanobium"))) %>%
+  ggplot(aes(x = Mem_Abund, y =   rsg_pos_per_ml-Cy_Abundance)) + 
+  geom_point(aes(color = Month)) + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", 
+                   cor.coef.name = "rho",
+                   p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) + 
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
+  facet_wrap(~membership, scale = "free_x", nrow = 1) + 
+  theme(legend.position = "right", 
+        aspect.ratio = 1,
+        axis.text = element_text(size = 8)) + 
+  labs(x = "Cyano Abundance/mL", y = "RSG + / mL-\nCyano Cells") 
+
+ggsave("test.png", width = 10, height = 4)
+```
+
+
+```{r old_Figure6c, fig.width = 6, fig.height = 6}
+
+joined %>%
+  filter(membership=="Total") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot(aes(x = Cy_Abundance/1e6, y =  rsg_pos_per_ml/1e6, color = Month)) + 
+  geom_point() + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", cor.coef.name = "rho",
+                   p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) + 
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        strip.text = element_blank()) + 
+  labs(x = "Cyano Abundance (million cells/ml)", y = "RSG+ Cells\n(millions/ml)")
+
+```
+
+```{r FigureS8, fig.width = 3, fig.height = 3}
+
+joined %>%
+  filter(membership=="Total") %>%
+  ggplot(aes(x = ctd_temperature, y =  avg_cells_per_ml)) + 
+  geom_point(aes(color = Month)) + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", cor.coef.name = "rho") +
+  scale_color_manual(values = month_colors) + 
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        strip.text = element_blank()) + 
+  labs(x = "Temperature (°C)", y = "Heterotroph\nAbundance / mL ")
+
+ggsave("test.png", width = 3, height = 3)
+joined %>%
+  filter(membership=="Total") %>%
+  ggplot(aes(x = ctd_temperature, y =  Richness)) + 
+  geom_point(aes(color = Month)) + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", cor.coef.name = "rho") +
+  scale_color_manual(values = month_colors) + 
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        strip.text = element_blank()) + 
+  labs(x = "Temperature (°C)", y = "Heterotroph Richness")
+
+joined %>%
+  filter(membership=="Total") %>%
+  ggplot(aes(x = ctd_temperature, y =  evenness)) + 
+  geom_point(aes(color = Month)) + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", cor.coef.name = "rho") +
+  scale_color_manual(values = month_colors) + 
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        strip.text = element_blank()) + 
+  labs(x = "Temperature (°C)", y = "Heterotroph Evenness")
+
+joined %>%
+  filter(membership=="Total") %>%
+  ggplot(aes(x = ctd_temperature, y =  rsg_pos_per_ml)) + 
+  geom_point(aes(color = Month)) + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", cor.coef.name = "rho") +
+  scale_color_manual(values = month_colors) + 
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        strip.text = element_blank()) + 
+  labs(x = "Temperature (°C)", y = "RSG + / mL ")
+
+joined %>%
+  filter(membership=="Total") %>%
+  ggplot(aes(x = ctd_temperature, y =  rsg_perc_pos)) + 
+  geom_point(aes(color = Month)) + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", cor.coef.name = "rho") +
+  scale_color_manual(values = month_colors) + 
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        strip.text = element_blank()) + 
+  labs(x = "Temperature (°C)", y = "% RGS +")
+
+
+```
+
+```{r pres-figures}
+
+joined %>%
+  filter(membership=="Total") %>%
+  ggplot(aes(x = Cy_Abundance, y =  avg_cells_per_ml - Cy_Abundance)) + 
+  geom_point() + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", cor.coef.name = "rho", p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) + 
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        strip.text = element_blank()) + 
+  labs(x = "Cyanobacteria / mL", y = "\nHeterotrophs / mL")
+
+joined %>%
+  filter(membership=="Total") %>%
+  ggplot(aes(x = Cy_Abundance, y = het_rsg_per_ml)) + 
+  geom_point() + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", cor.coef.name = "rho", p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) + 
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        strip.text = element_blank()) + 
+  labs(x = "Cyanobacteria / mL", y = "Respiring\nHeterotrophs / mL")
+
+
+ggsave("test.png", width = 4, height= 4)
+
+joined %>%
+  filter(membership=="Total") %>%
+  ggplot(aes(x = Cy_Abundance, y =  rsg_pos_per_ml)) + 
+  geom_point() + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", cor.coef.name = "rho", p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) + 
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        strip.text = element_blank()) + 
+  labs(x = "Cyanobacteria / mL", y = "Metabolically Active\nCells / mL")
+
+joined %>%
+  filter(membership=="Total") %>%
+  group_by(DNA_ID) %>%
+  mutate(Relative_Hets = (avg_cells_per_ml - Cy_Abundance) / avg_cells_per_ml) %>%
+  ggplot(aes(x = Cy_Abundance, y =  Relative_Hets)) + 
+  geom_point() + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", cor.coef.name = "rho", p.accuracy = 0.001) +
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  scale_color_manual(values = month_colors) + 
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        strip.text = element_blank()) + 
+  labs(x = "Cyanobacteria / mL", y = "Heterotroph\n Relative Abundance")
+
+
+```
+
+```{r FigureSupp_RichvsAbunds, fig.width = 8, fig.height = 6}
+
+joined %>%
+  mutate(Month = factor(Month, levels = c("August","September"))) %>%
+  ggplot(aes(x = Cy_Abundance/1e6, y =   Richness-Cy_Richness, color = Month)) + 
+  geom_point() + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", cor.coef.name = "rho",
+                   p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) + 
+  facet_wrap(~Month) + 
+  theme(legend.position = "none",
+        aspect.ratio = 1) + 
+  labs(x = "Cyano Abundance (million cells/ml)", y = "Heterotroph\nRichness")
+
+
+
+joined %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot(aes(x = Cy_Richness, y =  (avg_cells_per_ml - Cy_Abundance)/1e6, color = Month)) + 
+  geom_point() + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", cor.coef.name = "rho",
+                   p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) + 
+  facet_wrap(~Month) + 
+  theme(legend.position = "none",
+        aspect.ratio = 1) + 
+  labs(x = "Cyano Richness", y = "Heterotroph Abundance\n(million cells/ml)")
+
+joined %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot(aes(x = ctd_temperature, y = Richness-Cy_Richness, color = Month)) + 
+  geom_point() + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman") +
+  scale_color_manual(values = month_colors) + 
+  facet_wrap(~Month) + 
+  theme(legend.position = "none", 
+        aspect.ratio = 1) + 
+  labs(x = "Temperature (°C)", y = "Heterotroph Richness")
+
+joined %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot(aes(x = ctd_temperature, y =  (avg_cells_per_ml - Cy_Abundance)/1e6, color = Month)) + 
+  geom_point() + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman") +
+  scale_color_manual(values = month_colors) + 
+  facet_wrap(~Month) + 
+  theme(legend.position = "none", 
+        aspect.ratio = 1) + 
+  labs(x = "Temperature (°C)", y = "Heterotroph Abundance\n(million cells/ml)")
+
+joined %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot(aes(x = ctd_temperature, y =  (avg_cells_per_ml - Cy_Abundance)/1e6, color = Month)) + 
+  geom_point() + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman") +
+  scale_color_manual(values = month_colors) + 
+  facet_wrap(~Month) + 
+  theme(legend.position = "none", 
+        aspect.ratio = 1) + 
+  labs(x = "Temperature (°C)", y = "Heterotroph Abundance\n(million cells/ml)")
+
+
+```
+
+Now euks
+```{r FigureSupp_RichvsAbunds_Euk, fig.width = 10, fig.height = 4}
+
+load("data/07_Alpha_Diversity/euk_diversity_physeq.RData")
+
+euk_stats <- 
+  euk_diversity_physeq %>%
+  sample_data() %>%
+  data.frame() %>%
+  filter(Depth_Class == "S", DNA_ID != "KH_D076") %>%
+  left_join(all_cy_stats)
+
+euk_stats %>%
+  filter(Month != "May") %>%
+  mutate(
+         membership = factor(membership, levels = c("Total", "2","1","3"),
+                             labels = c("Total","C1: Microcystis","C2: Pseudanabaena", "C3: Cyanobium"))) %>%
+  ggplot(aes(x = Mem_Abund, y =   Richness)) + 
+  geom_point(aes(color = Month)) + 
+  ggpubr::stat_cor(show.legend = FALSE, method = "spearman", 
+                   cor.coef.name = "rho",
+                   p.accuracy = 0.001) +
+  scale_color_manual(values = month_colors) + 
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6))+
+  facet_wrap(~membership, scale = "free_x", nrow = 1) + 
+  theme(legend.position = "right", 
+        aspect.ratio = 1,
+        axis.text = element_text(size = 8)) + 
+  labs(x = "Cyano Abundance/mL", y = "Eukaryotic\nRichness") 
+
+ggsave("test.png", width = 10, height = 4)
+
+euk_stats %>%
+  filter(Month != "May") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot(aes(x = Cy_Abundance/1e6, y = Richness, color = Month)) + 
+  geom_point() + 
+  ggpubr::stat_cor(show.legend = FALSE) +
+  scale_color_manual(values = month_colors) + 
+  facet_wrap(~Month) + 
+  theme(legend.position = "none") + 
+  labs(x = "Cyano Abundance (million cells/ml)", y = "Eukaryotic\nRichness")
+
+
+
+```
+
+# Heterotroph Network 
+
+```{r FigureSupp_Mod_HetNetwork, fig.width = 6, fig.height=3}
+
+all_asv_ids <- abs_physeq %>%
+  tax_table() %>%
+  data.frame() %>%
+  select(ASV, Genus, Phylum) %>%
+  mutate(Genus = str_remove(Genus, "g__"))
+
+all_asv_ids %>% 
+  filter(ASV %in% top_asvs) %>%
+  count(Phylum)  %>%arrange(n)
+
+all_asv_ids %>% 
+  filter(ASV %in% top_asvs) %>%
+  count(Phylum)  %>% pull(n) %>% sum()
+
+all_asv_abunds <- 
+  abs_physeq %>%
+  psmelt() %>%
+  filter(Depth_Class == "S", DNA_ID != "KH_D076") %>%
+  group_by(ASV) %>%
+    summarize(Total_Abund = sum(Abundance))
+
+
+# cor_res <-
+#   abs_melted %>%
+#   filter(ASV %in% c(top_asvs, top_cyano_asvs$ASV)) %>%
+#   select(ASV, Rep_ID, Abundance) %>%
+#   left_join(wide_cy) %>%
+#   nest_by(ASV) %>%
+#   mutate(corr_results = list(rstatix::cor_test(data, vars = Abundance, vars2 = prok_names, method = "spearman")))
+# 
+# save(cor_res, file = "data/10_Cyano_Species_Distribution/cor_res.RData")
+
+load("data/10_Cyano_Species_Distribution/cor_res.RData")
+
+# het_graphs_nocentr_filter <- map(corrs, \(x){
+#   
+#   cor_mat <- 
+#   cor_res %>%
+#   unnest(corr_results) %>%
+#   mutate(cor = ifelse(cor>=x&p<0.01, cor, 0)) %>%
+#   select(ASV, var2, cor) %>%
+#   pivot_wider(names_from = var2, values_from = cor) %>%
+#   column_to_rownames("ASV") %>%
+#   as.matrix()
+#   
+#   adj_mat <- igraph::graph_from_biadjacency_matrix(cor_mat, weighted=T, directed = FALSE)
+#   
+#   graph <- as_tbl_graph(adj_mat) %>%
+#    as_tbl_graph(adj_mat) %>%
+#   left_join(all_asv_ids, by = c("name" = "ASV")) %>%
+#   left_join(all_asv_abunds, by = c("name" = "ASV")) 
+# })
+# 
+# het_mods <- map(het_graphs_nocentr_filter, \(x){
+#   clustered <- igraph::cluster_edge_betweenness(x)
+#   
+#   igraph::modularity(clustered)
+# 
+#   }) %>%
+#   unlist() 
+# 
+# 
+# 
+# het_graphs_nocyanos_filter <- map(corrs, \(x){
+#   
+#   cor_mat <- 
+#   cor_res %>%
+#   unnest(corr_results) %>%
+#   mutate(cor = ifelse(cor>=x&p<0.01, cor, 0)) %>%
+#   select(ASV, var2, cor) %>%
+#   pivot_wider(names_from = var2, values_from = cor) %>%
+#   column_to_rownames("ASV") %>%
+#   as.matrix()
+#   
+#   adj_mat <- igraph::graph_from_biadjacency_matrix(cor_mat, weighted=T, directed = FALSE)
+#   
+#   graph <- as_tbl_graph(adj_mat) %>%
+#    as_tbl_graph(adj_mat) %>%
+#   left_join(all_asv_ids, by = c("name" = "ASV")) %>%
+#   left_join(all_asv_abunds, by = c("name" = "ASV")) %>%
+#   dplyr::filter(
+#          !((!type)&Phylum == "p__Cyanobacteriota"))
+# })
+# 
+# het_mods_nocy <- map(het_graphs_nocyanos_filter, \(x){
+#   clustered <- igraph::cluster_edge_betweenness(x)
+#   
+#   igraph::modularity(clustered)
+# 
+#   }) %>%
+#   unlist() 
+#  
+# 
+# het_mod_df <- data.frame(Corr = corrs,
+#            Modularity_WithCyanos = het_mods,
+#            Modularity_NoCyanos = het_mods_nocy)
+# save(het_mod_df, file = "data/10_Cyano_Species_Distribution/het_mod_df.RData")  
+
+load(file = "data/10_Cyano_Species_Distribution/het_mod_df.RData")  
+
+het_mod_df %>%
+  pivot_longer(Modularity_WithCyanos:Modularity_NoCyanos, names_to = "Network", values_to = "Modularity") %>%
+  ggplot(aes(x = Corr, y = Modularity, color = Network)) + 
+  geom_line() + 
+  geom_point(size = 4) + 
+  scale_color_manual(values = c("#643D9A", "limegreen"), labels = c("No Cyanos", "With Cyanos")) + 
+  labs(x = "Minimum Correlation")
+
+ggsave("test.png", width = 6, height = 3)
+
+```
+
+
+
+```{r FigureSupp_HetNetwork, fig.width = 12, fig.height=8}
+
+
+
+het_graphs <- map(corrs, \(x){
+  
+  cor_mat <- 
+  cor_res %>%
+  unnest(corr_results) %>%
+  mutate(cor = ifelse(cor>=x&p<0.01, cor, 0)) %>%
+  select(ASV, var2, cor) %>%
+  pivot_wider(names_from = var2, values_from = cor) %>%
+  column_to_rownames("ASV") %>%
+  as.matrix()
+  
+  adj_mat <- igraph::graph_from_biadjacency_matrix(cor_mat, weighted=T, directed = FALSE)
+  
+  graph <- as_tbl_graph(adj_mat) %>%
+   as_tbl_graph(adj_mat) %>%
+  left_join(all_asv_ids, by = c("name" = "ASV")) %>%
+  left_join(all_asv_abunds, by = c("name" = "ASV")) %>%
+  mutate(Centrality = centrality_degree(mode = 'in')) %>%
+  filter(Centrality > 0)
+})
+
+het_plots <- map2(het_graphs, names(het_graphs), \(x,y){
+  set.seed(314)
+  edge_n <- 
+    x %>%
+  activate("edges") %>%
+  data.frame() %>%
+  nrow()
+  
+  ggraph(x, layout = "fr")+ 
+    geom_edge_fan(aes(alpha = weight), show.legend = FALSE) + 
+    geom_node_point(aes(shape = type, color = ifelse(type, NA, 
+                                                     ifelse(Phylum == "p__Cyanobacteriota", "Cyano.", "Non-cyano.")))) +
+  scale_color_manual(values = c("limegreen", "#643D9A")) + 
+  labs(title = paste0("Min. Corr = ", y), subtitle = paste0(edge_n, " edges")) + 
+  theme(legend.position = "none")
+})
+
+wrap_plots(het_plots[5:10])
+
+ggsave("test.png", width = 12, height = 8)
+```
+
+
+```{r}
+corrs[5:10]
+
+perc_cyano_res <- 
+  map(corrs, \(x){
+  cor_mat <- 
+    cor_res %>%
+      unnest(corr_results) %>%
+      mutate(cor = ifelse(cor>=x&p<0.01, cor, 0)) %>%
+      filter(cor > 0) %>%
+      select(ASV, var2, cor) %>%
+      left_join(all_asv_ids, by = c("ASV" = "ASV")) %>% 
+      ungroup() %>% 
+      mutate(is_cyano = ifelse(is.na(Phylum), FALSE, Phylum == "p__Cyanobacteriota")) %>%
+      ungroup() %>% 
+      group_by(var2) %>%
+      summarize(Perc_Cyano = sum(is_cyano) / n()) %>%
+      pull(Perc_Cyano)
+}) %>%
+  bind_rows() %>%
+  pivot_longer(everything(), names_to = "Corr", values_to = "Perc_Cyano")
+  
+perc_cyano_res %>%
+  ggplot(aes(y = Corr, x = Perc_Cyano, fill = stat(x))) + 
+  ggridges::geom_density_ridges_gradient(scale = 4) + 
+  scale_fill_distiller(palette = "PRGn", direction = 1) + 
+  labs(x = "Percent Edges to Cyanos", y = "Minimum Edge Strength") + 
+  theme(legend.position = "none")
+
+
+cor_mat <- cor_res %>%
+  unnest(corr_results) %>%
+  mutate(cor = ifelse(cor>=0.9&p<0.05, cor, 0)) %>%
+  select(ASV, var2, cor) %>%
+  pivot_wider(names_from = var2, values_from = cor) %>%
+  column_to_rownames("ASV") %>%
+  as.matrix()
+
+
+
+adj_mat <- igraph::graph_from_biadjacency_matrix(cor_mat, weighted=T, directed = FALSE)
+
+
+
+
+abs_melted %>%
+  group_by(Genus) %>%
+  summarize(total_ab = sum(Abundance)) %>%
+  filter(!is.na(Genus)) %>%
+  slice_max(n = 10, order_by = total_ab)
+ 
+
+graph <- as_tbl_graph(adj_mat) %>%
+  left_join(all_asv_ids, by = c("name" = "ASV")) %>%
+  left_join(all_asv_abunds, by = c("name" = "ASV")) %>%
+    filter(!is.na(Genus)) %>%
+  mutate(Centrality = centrality_degree(mode = 'in')) %>%
+  filter(Centrality > 0)
+
+set.seed(314)
+ggraph(graph, layout = "fr")+ 
+    geom_edge_fan(aes(alpha = weight), show.legend = FALSE) + 
+    geom_node_point(aes(shape = type, color = ifelse(type, Genus, Phylum), size = Total_Abund)) +
+  scale_color_manual(values = c(cyano_genus_colors, phylum_colors))
+
+set.seed(314)
+ggraph(graph, layout = "fr")+ 
+    geom_edge_fan(aes(alpha = weight), show.legend = FALSE) + 
+    geom_node_point(aes(shape = type, color = ifelse(type, NA, Phylum), size = Total_Abund)) +
+  scale_color_manual(values = c(cyano_genus_colors, phylum_colors))
+
+
+cor_mat <- cor_res %>%
+  unnest(corr_results) %>%
+  mutate(cor = ifelse(cor>=0.85&p<0.05, cor, 0)) %>%
+  select(ASV, var2, cor) %>%
+  pivot_wider(names_from = var2, values_from = cor) %>%
+  column_to_rownames("ASV") %>%
+  as.matrix()
+
+
+
+adj_mat <- igraph::graph_from_biadjacency_matrix(cor_mat, weighted=T, directed = FALSE)
+
+
+all_asv_ids <- abs_physeq %>%
+  tax_table() %>%
+  data.frame() %>%
+  select(ASV, Phylum:Species) %>%
+  mutate(Genus = str_remove(Genus, "g__"))
+
+all_asv_abunds <- 
+  abs_physeq %>%
+  psmelt() %>%
+  filter(Depth_Class == "S", DNA_ID != "KH_D076") %>%
+  group_by(ASV) %>%
+    summarize(Total_Abund = sum(Abundance))
+
+abs_melted %>%
+  group_by(Genus) %>%
+  summarize(total_ab = sum(Abundance)) %>%
+  filter(!is.na(Genus)) %>%
+  slice_max(n = 10, order_by = total_ab)
+ 
+
+graph <- as_tbl_graph(adj_mat) %>%
+  left_join(all_asv_ids, by = c("name" = "ASV")) %>%
+  left_join(all_asv_abunds, by = c("name" = "ASV")) %>%
+    filter(!is.na(Genus)) %>%
+  mutate(Centrality = centrality_degree(mode = 'in')) %>%
+  filter(Centrality > 1)
+
+set.seed(314)
+ggraph(graph, layout = "fr")+ 
+    geom_edge_fan(aes(alpha = weight), show.legend = FALSE) + 
+    geom_node_point(aes(shape = type, color = ifelse(type, Genus, Phylum), size = Total_Abund)) +
+  scale_color_manual(values = c(cyano_genus_colors, phylum_colors))
+
+cor_res %>%
+  unnest(corr_results) %>%
+  mutate(cor = ifelse(cor>=0.90&p<0.05, cor, 0)) %>%
+  select(ASV, var2, cor) %>%
+  filter(cor > 0, ASV != var2) %>%
+  left_join(all_asv_ids) %>%
+  left_join(all_asv_ids, by = c("var2" = "ASV")) %>%
+  left_join(all_asv_abunds, by = c("ASV" = "ASV")) %>%
+  filter(Phylum.x != "p__Cyanobacteriota") %>% arrange(desc(Total_Abund))
+
+cor_res %>%
+  unnest(corr_results) %>%
+  mutate(cor = ifelse(cor > 0.5&p<0.01, cor, 0)) %>%
+  left_join(all_asv_ids) %>%
+  left_join(all_asv_ids, by = c("var2" = "ASV")) %>%
+  left_join(all_asv_abunds, by = c("ASV" = "ASV")) %>%
+  left_join(all_asv_abunds, by = c("var2" = "ASV")) %>%
+  rename(Cyano_Abund = Total_Abund.y, Het_Abund = Total_Abund.x) %>%
+  filter(cor > 0.5) %>%
+  ggplot(aes(x = Cyano_Abund, y = Het_Abund, size = cor, color = Phylum.x)) + 
+  geom_point(alpha = 0.5) + 
+  scale_x_log10(limits = c(1e5, 1e6)) + 
+  scale_y_log10(limits = c(1e5,5e7)) + 
+  scale_color_manual(values =phylum_colors)
+
+```
+
+Cyanobacteria are almost exclusively correlated to...other cyanobacteria. Lol!
+
+```{r Figure5b, fig.width = 6, fig.height = 6}
+
+cor_mat <- 
+  cor_res %>%
+  unnest(corr_results) %>%
+  mutate(cor = ifelse(cor>=0.85&p<0.01, cor, 0)) %>%
+  select(ASV, var2, cor) %>%
+  pivot_wider(names_from = var2, values_from = cor) %>%
+  column_to_rownames("ASV") %>%
+  as.matrix()
+  
+adj_mat <- igraph::graph_from_biadjacency_matrix(cor_mat, weighted=T, directed = FALSE)
+
+number_of_het_asvs <- as_tbl_graph(adj_mat) %>%
+  as_tbl_graph(adj_mat) %>%
+  left_join(all_asv_ids, by = c("name" = "ASV")) %>%
+  left_join(all_asv_abunds, by = c("name" = "ASV")) %>%
+  dplyr::filter(
+         !((!type)&Phylum == "p__Cyanobacteriota")) %>%
+  dplyr::filter(Total_Abund > 5e4) %>%
+  dplyr::filter(!type) %>% pull(name) %>% unique() %>% length()
+
+graph <- as_tbl_graph(adj_mat) %>%
+  as_tbl_graph(adj_mat) %>%
+  left_join(all_asv_ids, by = c("name" = "ASV")) %>%
+  left_join(all_asv_abunds, by = c("name" = "ASV")) %>%
+  dplyr::filter(
+         !((!type)&Phylum == "p__Cyanobacteriota")) %>%
+  dplyr::filter(Total_Abund > 5e4) %>%
+    mutate(Centrality = centrality_degree(mode = 'out')) %>%
+  dplyr::filter(Centrality > 0) %>%
+  mutate(Tax_ID = ifelse(!is.na(Genus), Genus,
+                         ifelse(!is.na(Family), Family,
+                                ifelse(!is.na(Phylum), Phylum, "Unknown"))),
+         Genus = ifelse(is.na(Genus),"(Rare/Unknown)", Genus)
+         )
+
+graph %>%
+  filter(Genus == "Microcystis"|Phylum == "p__Actinomycetota") 
+
+abs_melted %>%
+  filter(ASV == "PROK_396")
+
+# graph %>%
+#   filter(Family == "f__Caldilineaceae")
+# 
+# tax_table(abs_physeq) %>%
+#   data.frame() %>%
+#   dplyr::filter(ASV == "PROK_63")
+# 
+# tax_table(abs_physeq) %>%
+#   data.frame() %>% 
+#   dplyr::filter(Genus == "g__GFB01")
+# 
+# abs_melted %>%
+#   filter(ASV == "PROK_63")
+
+
+set.seed(314)
+ggraph(graph, layout = "fr")+ 
+  geom_edge_fan(aes(alpha = weight), show.legend = FALSE, linewidth = 1) + 
+  geom_node_point(aes(color = ifelse(type, Genus, Phylum), shape = type, size = Total_Abund)) + 
+  scale_color_manual(values = c(cyano_genus_colors, phylum_colors)) + 
+  scale_size_continuous(transform = "log10") + 
+  theme(legend.position = "none")
+
+ggsave("test.png", width = 6, height = 6)
+
+graph %>%
+  mutate(Genus = factor(Genus, levels = names(cyano_genus_colors))) %>%
+  ggraph(layout = "fr")+ 
+  geom_edge_fan(aes(alpha = weight), show.legend = FALSE) + 
+  geom_node_point(aes(color = Genus, shape = type, size = Total_Abund), key_glyph = "point") + 
+  scale_color_manual(values = c(cyano_genus_colors, phylum_colors), na.value = "grey") + 
+  scale_size_continuous(transform = "log10", labels = scales::unit_format(unit = "M", scale = 1e-6)) +
+  scale_shape_discrete(guide = FALSE) + 
+  guides(color = guide_legend(
+    override.aes = list(shape = 17, size = 5))) + 
+  labs(color = "Cyano Hub Genus")
+
+ggsave("test.png", width = 6, height = 6)
+
+
+ggraph(graph, layout = "fr")+ 
+  geom_edge_fan(aes(alpha = weight), show.legend = FALSE) + 
+  geom_node_point(aes(color = ifelse(!type, Phylum, NA), shape = type, size = Total_Abund), key_glyph = "point") + 
+  scale_color_manual(values = c(cyano_genus_colors, phylum_colors), na.value = "grey") + 
+  scale_size_continuous(transform = "log10", guide = FALSE) +
+  scale_shape_discrete(guide = FALSE) + 
+  guides(color = guide_legend(
+    override.aes = list(shape = 16, size = 5))) + 
+  labs(color = "Non-Cyano Phylum")
+
+```
+
+
+```{r Figure5c, fig.width = 5, fig.height = 5}
+
+clustered <- igraph::cluster_walktrap(graph)
+
+members <- igraph::membership(clustered) 
+
+mem_df <- data.frame(name = names(members),
+                     membership = members)
+
+top_mem<- 
+  mem_df %>%
+  count(membership) %>%
+  slice_max(n = 5, order_by = n) %>%
+  pull(membership)
+
+good_mem_df <- 
+  mem_df %>%
+  mutate(membership = ifelse(membership %in% top_mem, membership, NA),
+         membership = factor(membership, labels = c(1:5)))
+
+mem_graph <- 
+  graph %>%
+  left_join(good_mem_df) %>%
+  dplyr::filter(membership %in% c(1))
+  
+
+set.seed(314)
+ggraph(mem_graph, layout = "fr")+ 
+    geom_edge_fan(aes(alpha = weight), show.legend = FALSE, linewidth = 1) +
+  geom_node_label(aes(label = Tax_ID, size = Total_Abund, color = ifelse(type, Genus, Phylum)), label.size = NA) + 
+  scale_size_continuous(transform = "log10") +
+  scale_color_manual(values = c(cyano_genus_colors, phylum_colors))   + 
+  scale_x_continuous(expand = expansion(.2)) + 
+  theme(legend.position  = "none")
+
+ggsave("test.png", width = 5, height = 5, dpi = 300)
+```
+
+
+```{r Figure5d, fig.width = 9, fig.height = 7}
+mem_graph <- 
+  graph %>%
+  left_join(good_mem_df) %>%
+  dplyr::filter(membership %in% c(2,4))
+  
+
+set.seed(312)
+ggraph(mem_graph, layout = "fr")+ 
+    geom_edge_fan(aes(alpha = weight), show.legend = FALSE,linewidth = 1) +
+  geom_node_label(aes(label = Tax_ID, size = Total_Abund, color = ifelse(type, Genus, Phylum)), label.size = NA) + 
+  scale_size_continuous(transform = "log10") +
+  scale_color_manual(values = c(cyano_genus_colors, phylum_colors))   + 
+  scale_x_continuous(expand = expansion(.2)) + 
+  theme(legend.position  = "none")
+
+ggsave("test.png", width = 9, height = 7, dpi = 300)
+
+```
+
+
+```{r Figure5e, fig.width = 7, fig.height = 3.5}
+mem_graph <- 
+  graph %>%
+  left_join(good_mem_df) %>%
+  dplyr::filter(membership %in% c(3))
+  
+
+set.seed(312)
+ggraph(mem_graph, layout = "fr")+ 
+    geom_edge_fan(aes(alpha = weight), show.legend = FALSE, linewidth = 1) +
+  geom_node_label(aes(label = Tax_ID, size = Total_Abund, color = ifelse(type, Genus, Phylum)), label.size = NA) + 
+  scale_size_continuous(transform = "log10") +
+  scale_color_manual(values = c(cyano_genus_colors, phylum_colors))   + 
+  scale_x_continuous(expand = expansion(.3)) + 
+  theme(legend.position  = "none")
+
+ggsave("test.png", width = 7, height = 3.5, dpi = 300)
+
+
+```
+
+

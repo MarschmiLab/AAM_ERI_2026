@@ -1,0 +1,994 @@
+---
+title: "Comparing Samples with Beta Diversity" 
+author: "Augustus Pendleton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+knitr: 
+  opts_chunk: 
+    fig.path: ../figures/08b_Prokaryotic_Beta_Diversity/
+editor_options: 
+  chunk_output_type: console
+---
+
+# Goals of this document
+
+Use dissimilarity metrics (beta diversity) to find patterns or groups in the bacterial composition between our samples. While this seems kinda simple going in, there are a lot of choices to make with incorporating different dissimilarity metrics and factoring in absolute abundance. 
+
+# Load Data and Packages
+
+```{r load-packages}
+
+pacman::p_load(phyloseq, ggdendro, dendextend, vegan, patchwork, fun.gus, GUniFrac, tidyverse)
+
+# Make sure we're using the MarschmiLab version, which incorporates absolute abundance!
+packageDescription("GUniFrac")
+
+
+source("code/R/plotting_aesthetics.R")
+
+load("data/07_Alpha_Diversity/diversity_physeq.RData")
+
+```
+
+# Explore samples via ordination
+
+Conflicted with the best way to approach rarefaction and absolute values here. I'm less confident than I was with Ontario that I'm reaching equal saturation across my samples, and I don't want my beta diversity to be confounded by richness due to sequencing depth. What I settled on is the same approach as we discuss in the Unifrac paper, where I do rarefaction, measure beta diversity, and then average. 
+
+1. Rarefy all of our samples which had >10,000 reads to the minimum sample sum = `r min(sample_sums(diversity_physeq))`
+2. Normalize the rarefied counts by the absolute abundance (measured by flow cytometry)
+3. Calculate beta diversity between samples for each iteration of rarefaction
+4. Average the beta diversity measurement across all iterations to make one permuted distance matrix
+
+The generate_rarefied_abs_tables returns these rarefied, absolute-count normalized tables in the form of a 3D-array, where dim 1 is each sample, dim 2 is each iteration of rarefaction, and dim 3 is each ASV
+
+```{r, generating-abs-dist-objects}
+
+source("code/R/generate_rarefied_abs_tables.R")
+
+cell_counts_prep <- 
+  diversity_physeq %>%
+  sample_data %>%
+  data.frame %>%
+  select(DNA_ID, avg_cells_per_ml)
+
+cell_counts <- cell_counts_prep$avg_cells_per_ml
+
+names(cell_counts) = cell_counts_prep$DNA_ID
+
+abs_tables <- generate_rarefied_abs_tables(physeq = diversity_physeq, # Physeq with non-normalized counts (do not convert to rel abundance!)
+                              iterations = 100, # Number of rarefy steps
+                              rare.depth = min(sample_sums(diversity_physeq)), # Depth to rarefy to
+                              abs.counts = cell_counts, # NAMED vector of cell counts for each sample
+                              seed = 314) # Random seed for reproducibility
+
+dims <- dim(abs_tables)
+
+abs_bray_dists <- 
+  map(c(1:dims[2]), 
+    \(x)vegdist(abs_tables[,x,], method = "bray"))
+
+abs_bray_dist <- Reduce(`+`, abs_bray_dists) / length(abs_bray_dists)
+
+# This takes FOREVER!
+# abs_gun_dists <-
+#   map(c(1:dims[2]),
+#     \(x)GUniFrac(otu.tab = abs_tables[,x,],
+#                  tree = phy_tree(diversity_physeq),
+#                  alpha = seq(0,1,by = 0.1),
+#                  normalize_counts = FALSE,
+#                  verbose = FALSE))
+# 
+# save(abs_gun_dists, file = "data/08_Beta_Diversity/abs_gun_dists.RData")
+
+load("data/08_Beta_Diversity/abs_gun_dists.RData")
+
+gun_UWs <- map(abs_gun_dists,
+              \(x)as.dist(x$unifracs[,,"d_UW"]))
+
+gun_0s <- map(abs_gun_dists, 
+              \(x)as.dist(x$unifracs[,,"d_0"]))
+
+gun_0.5s <- map(abs_gun_dists, 
+              \(x)as.dist(x$unifracs[,,"d_0.5"]))
+
+gun_1s <- map(abs_gun_dists, 
+              \(x)as.dist(x$unifracs[,,"d_1"]))
+
+gun_dists <- list("Unweighted" = gun_UWs,
+                  "Alpha_0" = gun_0s,
+                  "Alpha_0.5" = gun_0.5s,
+                  "Alpha_1" = gun_1s)
+
+abs_unifrac_dists <- map(gun_dists, 
+                         \(x)Reduce(`+`, x) / length(x))
+
+```
+
+```{r, generating-dist-objects-rarefaction}
+
+# sorensen <- rarefaction_beta_calculations(diversity_physeq,
+#                                           rarefy_depth = min(sample_sums(diversity_physeq)),
+#                                           iterations = 100,
+#                                           method = "sorensen",
+#                                           seed = 314,
+#                                           threads = 20)
+# 
+# bray <- rarefaction_beta_calculations(diversity_physeq,
+#                                           rarefy_depth = min(sample_sums(diversity_physeq)),
+#                                           iterations = 100,
+#                                           method = "bray",
+#                                           seed = 314,
+#                                           threads = 20)
+# 
+# unifrac <- rarefaction_beta_calculations(diversity_physeq,
+#                                           rarefy_depth = min(sample_sums(diversity_physeq)),
+#                                           iterations = 100,
+#                                           method = "unifrac",
+#                                           seed = 314,
+#                                           threads = 20)
+# 
+# wunifrac <- rarefaction_beta_calculations(diversity_physeq,
+#                                           rarefy_depth = min(sample_sums(diversity_physeq)),
+#                                           iterations = 100,
+#                                           method = "wunifrac",
+#                                           seed = 314,
+#                                           threads = 20)
+# 
+# dist_objs <-
+#   list(Sorensen = sorensen,
+#        Bray = bray,
+#        Unweighted_Unifrac = unifrac,
+#        Weighted_Unifrac = wunifrac)
+# 
+# save(dist_objs,
+#      file = "data/08_Beta_Diversity/dist_objs.RData")
+
+load("data/08_Beta_Diversity/dist_objs.RData")
+
+```
+
+
+```{r, taxa-ordinations, fig.width = 8, fig.height = 4}
+
+sorensen <- plot_ordination(physeq = diversity_physeq,
+                ordination = ordinate(diversity_physeq, method = "PCoA", distance = dist_objs[["Sorensen"]]),
+                color = "Basin",
+                shape = "Month") + 
+  labs(title = "Sorensen",) + 
+  geom_point(alpha = .5, size = 4, 
+             aes(color = Basin, shape = Month)) + 
+  scale_color_manual(values = basin_colors)
+
+rel_bray_plot <- plot_ordination(physeq = diversity_physeq,
+                ordination = ordinate(diversity_physeq, method = "PCoA", distance = dist_objs[["Bray"]]),
+                color = "Basin",
+                shape = "Month") + 
+  labs(title = "Relative Bray",) + 
+  geom_point(alpha = .5, size = 4, 
+             aes(color = Basin, shape = Month)) + 
+  scale_color_manual(values = basin_colors)
+
+abs_bray_plot <- plot_ordination(physeq = diversity_physeq,
+                ordination = ordinate(diversity_physeq, method = "PCoA", distance = abs_bray_dist),
+                color = "Basin",
+                shape = "Month") + 
+  labs(title = "Absolute Bray",) + 
+  geom_point(alpha = .5, size = 4, 
+             aes(color = Basin, shape = Month))+ 
+  scale_color_manual(values = basin_colors)
+
+sorensen + rel_bray_plot + abs_bray_plot + 
+  plot_layout(guides = "collect")
+```
+
+
+
+```{r phylo-ordinations, fig.width = 8, fig.height = 6}
+abs_un_plots <- map2(abs_unifrac_dists, names(abs_unifrac_dists),
+    \(x,y){
+      plot_ordination(physeq = diversity_physeq,
+                ordination = ordinate(diversity_physeq, method = "PCoA", distance = x),
+                color = "Basin",
+                shape = "Month") + 
+             labs(title = y) + 
+             geom_point(alpha = .5, size = 4, 
+             aes(color = Basin, shape = Month) ) + 
+  scale_color_manual(values = basin_colors)
+    })
+
+wrap_plots(plotlist = abs_un_plots) + 
+  plot_layout(guides = "collect")
+
+abs_un_plots <- map2(abs_unifrac_dists, names(abs_unifrac_dists),
+    \(x,y){
+      plot_ordination(physeq = diversity_physeq,
+                ordination = ordinate(diversity_physeq, method = "PCoA", distance = x),
+                color = "Depth_Class",
+                shape = "Month") + 
+             labs(title = y) + 
+             geom_point(alpha = .5, size = 4, 
+             aes(color = Depth_Class, shape = Month) ) + 
+  scale_color_manual(values = c("darkblue","gold"))
+    })
+
+wrap_plots(plotlist = abs_un_plots) + 
+  plot_layout(guides = "collect")
+
+```
+
+
+# Much simpler approach to Unifrac analysis:
+
+
+```{r simple-unifrac}
+
+rel_matrix <- diversity_physeq %>%
+  transform_sample_counts(., \(x)x/sum(x)) %>%
+  otu_table() %>%
+  as.matrix()
+
+colnames(rel_matrix)
+
+abs_matrix <- map2(colnames(rel_matrix), cell_counts, \(x,y)round(rel_matrix[,x]*y)) %>%
+  bind_cols() %>%
+  as.matrix()
+
+row.names(abs_matrix) <- row.names(rel_matrix)
+
+abs_physeq <- diversity_physeq
+
+abs_physeq@otu_table <- NULL
+
+abs_physeq@otu_table <- otu_table(abs_matrix, taxa_are_rows = TRUE)
+
+bad_mat <- otu_table(abs_physeq)
+
+count_mat <- matrix(bad_mat, nrow = nrow(bad_mat))
+
+row.names(count_mat) <- row.names(bad_mat)
+colnames(count_mat) <- colnames(bad_mat)
+
+abs_gunifrac_once <-
+  GUniFrac(otu.tab = t(count_mat), 
+                 tree = phy_tree(abs_physeq),
+                 alpha = c(0,0.5,1),
+                 normalize_counts = FALSE,
+                 verbose = FALSE)
+
+bray_mat <- as.matrix(distance(abs_physeq, method = "bray"))
+```
+
+Just working with alpha = 0.5 and Bray-Curtis for a bit.
+
+
+```{r}
+
+samples_to_keep <- 
+  sample_data(abs_physeq) %>%
+  data.frame() %>%
+  filter(Depth_Class == "S") %>%
+  pull(DNA_ID)
+
+abs_0.5_once <- abs_gunifrac_once$unifracs[,,"d_0.5"]
+
+trim_gun <- as.dist(abs_0.5_once[samples_to_keep, samples_to_keep])
+
+trim_bray <- as.dist(bray_mat[samples_to_keep, samples_to_keep])
+
+cuts <- hclust(trim_bray,
+               method= "average") %>%
+  cutree(5)
+
+gun_cuts <- hclust(trim_gun,
+                   method = "average") %>%
+  cutree(5)
+
+bray_dendro <- 
+  hclust(trim_bray,
+       method = "average") %>%
+  as.dendrogram()
+
+save(bray_dendro, file = "data/08_Beta_Diversity/bray_dendro.RData")
+
+trim_physeq <- 
+  abs_physeq %>%
+  subset_samples(., DNA_ID %in% samples_to_keep) %>%
+  microViz::ps_join(data.frame(DNA_ID = names(cuts), Bray_Group = factor(cuts),
+                       Gun_Group = factor(gun_cuts)))
+
+
+plot_ordination(trim_physeq,
+                ordination = ordinate(trim_physeq, method = "PCoA", distance = trim_bray),
+                color = "Bray_Group")
+
+plot_ordination(trim_physeq,
+                ordination = ordinate(trim_physeq, method = "PCoA", distance = trim_gun),
+                color = "Gun_Group")
+
+plot_ordination(trim_physeq,
+                ordination = ordinate(trim_physeq, method = "PCoA", distance = trim_bray),
+                color = "Gun_Group")
+
+plot_ordination(trim_physeq,
+                ordination = ordinate(trim_physeq, method = "PCoA", distance = trim_gun),
+                color = "Bray_Group")
+
+
+plot_ordination(trim_physeq,
+                ordination = ordinate(transform_sample_counts(trim_physeq, \(x)x/sum(x)), method = "PCoA", distance = "bray"),
+                color = "Gun_Group")
+```
+
+# Mapping Groups
+
+```{r load-mapping-packages}
+
+pacman::p_load(sf, terra, tmap, gstat, install = FALSE)
+
+# Define some shapes and objects
+
+raw_erie <- read_sf("data/spatial_imports/hydro_p_LakeErie/hydro_p_LakeErie.shp") %>%
+  st_transform(crs = "EPSG:4326")
+
+erie_outline <- raw_erie %>%
+  st_union()
+
+trim_sf <- trim_physeq %>%
+  sample_data() %>%
+  data.frame() %>%
+  left_join(data.frame(DNA_ID = names(cuts), Bray_Group = factor(cuts),
+                       Gun_Group = factor(gun_cuts))) %>%
+  st_as_sf(coords = c("Longitude","Latitude"), crs = "EPSG:4326")
+
+trim_sf %>%
+  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
+  ggplot() + 
+  geom_sf(aes(color = Bray_Group), size = 3, alpha = 0.7) + 
+  facet_wrap(~Month, ncol = 1)+
+  geom_sf(data = erie_outline, fill = NA)
+
+
+trim_sf %>%
+  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
+  ggplot() + 
+  geom_sf(aes(color = Gun_Group), size = 3, alpha = 0.7) + 
+  facet_wrap(~Month, ncol = 1)+
+  geom_sf(data = erie_outline, fill = NA)
+
+```
+
+# Saving Objects
+
+```{r saving-objects}
+
+save(abs_physeq,
+     file = "data/08_Beta_Diversity/abs_physeq.RData")
+
+save(trim_physeq,
+     file = "data/08_Beta_Diversity/trim_physeq.RData")
+
+melted <- trim_physeq %>% 
+  psmelt
+
+melted %>%
+  dplyr::filter(Genus == "g__Microcystis") %>%
+  group_by(Sample_ID) %>%
+  summarize(Abund = sum(Abundance),
+            mc = mean(Microcystin_Total)) %>%
+  ggplot(aes(x = Abund, y = mc)) + 
+  geom_point() + 
+  scale_x_log10() + 
+  labs(x = "Abundance of Microcystis",
+       y = "Microcystin Concentration")
+
+
+```
+
+
+# Just focusing on cyanos
+
+
+```{r just-cyanos, fig.width = 8, fig.height = 8}
+
+cyano_physeq <- 
+  trim_physeq %>%
+  subset_samples(., Month != "May") %>%
+  subset_samples(., DNA_ID != "KH_D076") %>%
+  prune_taxa(taxa_sums(.) > 0, .) %>%
+  subset_taxa(., Phylum == "p__Cyanobacteriota")
+
+cy_mat_raw <- t(otu_table(cyano_physeq))
+
+rows <- nrow(cy_mat_raw)
+
+cy_mat <- matrix(cy_mat_raw, nrow = rows)
+
+colnames(cy_mat) <- colnames(cy_mat_raw)
+rownames(cy_mat) <- rownames(cy_mat_raw)
+
+cy_guns <- GUniFrac(otu.tab = cy_mat,
+                  tree = phy_tree(cyano_physeq),
+                  alpha = seq(0,1,by = 0.1),
+                  normalize_counts = FALSE,
+                  verbose = TRUE)
+
+gun_names <- c("d_UW","d_0","d_0.1","d_0.2","d_0.3","d_0.4","d_0.5","d_0.6","d_0.7","d_0.8","d_0.9","d_1")
+
+names(gun_names) <- gun_names
+
+cy_gun_ds <- 
+  map(gun_names, \(x){
+    as.dist(cy_guns$unifracs[,,x])
+})
+
+cell_dist <- cyano_physeq %>%
+  sample_sums() %>%
+  dist()
+
+cell_corr <- unlist(map(cy_gun_ds, \(x)vegan::mantel(cell_dist, x, permutations = 999)$statistic))
+
+data.frame(Alpha = seq(0,1,by=0.1),
+           Corr = cell_corr[c(2:12)]) %>%
+  ggplot(aes(x = Alpha, y = Corr)) + 
+  geom_line() + 
+  scale_y_continuous(limits = c(0,1))
+
+# Wow - way less responsive than many of the unifrac papers!
+# I'm gonna go with an alpha of 0.4
+
+
+cy_dist <- as.dist(cy_guns$unifracs[,,"d_0.4"])
+
+
+cy_clust <- hclust(cy_dist, method = "average")
+
+cy_cuts <- cutree(cy_clust, 6)  
+
+
+cy_sf <- cyano_physeq %>%
+  sample_data() %>%
+  data.frame() %>%
+  left_join(data.frame(DNA_ID = names(cy_cuts), Cy_Group = factor(cy_cuts))) %>%
+  st_as_sf(coords = c("Longitude","Latitude"), crs = "EPSG:4326")
+
+
+cy_sf %>%
+  ggplot() + 
+  geom_sf(aes(color = Cy_Group), size = 4) + 
+  facet_wrap(~Month)
+
+# Or, going with Bray
+
+cyano_bray <- phyloseq::distance(cyano_physeq, method = "bray")
+
+cy_clust <- hclust(cyano_bray, method = "average")
+
+cy_cuts <- cutree(cy_clust, 7)  
+
+cy_sf <- cyano_physeq %>%
+  sample_data() %>%
+  data.frame() %>%
+  left_join(data.frame(DNA_ID = names(cy_cuts), Cy_Group = factor(cy_cuts))) %>%
+  st_as_sf(coords = c("Longitude","Latitude"), crs = "EPSG:4326")
+
+```
+
+```{r Figure3a, fig.width = 2.5, fig.height = 4}
+
+cy_sf %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = Cy_Group), size = 3, alpha = 1) + 
+  facet_wrap(~Month, ncol = 1)
+
+
+cy_sf %>%
+  mutate(Month = factor(Month, levels = c("May", "August","September")),
+         Cy_Group_Name = case_when(
+           Cy_Group == 1 ~ "Deep Desert",
+           Cy_Group == 2 ~ "Peak Bloom",
+           Cy_Group == 3 ~ "Eastern Basin",
+           Cy_Group == 4 ~ "Sep. Central Basin",
+           Cy_Group == 5 ~ "Bloom Adjacent 2",
+           Cy_Group == 6 ~ "Aug. Central Basin",
+           Cy_Group == 7 ~ "Bloom Adjacent 1"),
+         Cy_Group_Name = factor(Cy_Group_Name,
+                                levels = c(
+                                  "Peak Bloom",
+                                  "Bloom Adjacent 1",
+                                  "Bloom Adjacent 2",
+                                  "Eastern Basin",
+                                  "Aug. Central Basin",
+                                  "Sep. Central Basin",
+                                  "Deep Desert"
+                                ))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = Cy_Group_Name), size = 3, alpha = 1) + 
+  facet_wrap(~Month, ncol = 1)+
+  scale_color_manual(values = cy_group_colors, name = "Cyano Group") + 
+    theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks= element_blank(),
+        legend.position = "none")
+
+#ggsave(filename = "test.png", height = 8, width = 8, dpi = 300)
+
+cyano_physeq <- cyano_physeq %>%
+  microViz::ps_join(data.frame(DNA_ID = names(cy_cuts), Cy_Group = factor(cy_cuts)))
+
+df <- plot_ordination(cyano_physeq, 
+                ordination = ordinate(cyano_physeq, distance = "bray", method = "PCoA"),
+                color = "Cy_Group", justDF = TRUE) 
+
+df %>%
+  mutate( Cy_Group_Name = case_when(
+           Cy_Group == 1 ~ "Deep Desert",
+           Cy_Group == 2 ~ "Peak Bloom",
+           Cy_Group == 3 ~ "Eastern Basin",
+           Cy_Group == 4 ~ "Sep. Central Basin",
+           Cy_Group == 5 ~ "Bloom Adjacent 2",
+           Cy_Group == 6 ~ "Aug. Central Basin",
+           Cy_Group == 7 ~ "Bloom Adjacent 1")
+         ) %>%
+  ggplot(aes(x = Axis.1, y = Axis.2, color = Cy_Group_Name)) + 
+  geom_point() + 
+  geom_point(size = 4, alpha = 0.4) + 
+  scale_color_manual(values = cy_group_colors) + 
+  theme(legend.position = "none") + 
+  labs(x = "PCoA 1 [25.6%]", y = "PCoA 2 [20.9%]", title = "Relative Unifrac")
+
+ggsave("test.png", width = 3, height = 3)
+
+save(cyano_physeq, file = "data/08_Beta_Diversity/cyano_physeq.RData")
+
+cy_dendro <- cy_clust %>%
+  as.dendrogram()
+  
+save(cy_dendro, file = "data/08_Beta_Diversity/cy_dendro.RData")
+
+```
+
+
+# Just western basin
+
+```{r}
+
+wcyano_physeq <- 
+  trim_physeq %>%
+  subset_samples(., Month != "May") %>%
+  subset_samples(., Station_ID %in% c("58", "59","60","61","91","966")) %>%
+  prune_taxa(taxa_sums(.) > 0, .) %>%
+  subset_taxa(., Phylum == "p__Cyanobacteriota") %>%
+  microViz::ps_mutate(N_vs_S = ifelse(Station_ID %in% c("58","59"), "South","North"))
+
+plot_ordination(wcyano_physeq, ordination = ordinate(wcyano_physeq, distance = "bray", method = "PCoA"), color = "N_vs_S")
+
+wcy_melt <- psmelt(wcyano_physeq)
+
+wcyano_bray <- phyloseq::distance(wcyano_physeq, method = "bray")
+
+adonis2(wcyano_bray~N_vs_S, data = data.frame(sample_data(wcyano_physeq)))
+
+
+wcy_clust <- hclust(wcyano_bray, method = "average")
+
+plot(wcy_clust)
+
+library(ggdendro)
+
+wcy_dend <- as.dendrogram(wcy_clust)
+
+dendro_data(wcy_clust)
+
+dna_id_order <-  ggdendro::dendro_data(wcy_dend)$label$label
+
+sample_annotation <- 
+  wcy_melt %>%
+  select(DNA_ID, Station_ID, Month) %>%
+  unique() %>%
+  mutate(Rep_ID = factor(DNA_ID, levels = dna_id_order))
+
+
+tip_groups <- data.frame(Rep_ID = dendro_data(wcy_dend)$labels$label) %>%
+   left_join(sample_annotation)
+
+dend_data <- dendro_data(wcy_dend)
+
+ggplot(dend_data$segments) + 
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend)) + 
+  geom_text(data = dend_data$labels, aes(x, y, label = tip_groups$Station_ID, color = tip_groups$Month),
+            hjust = 0, size = 8, show.legend = FALSE) +
+  theme_void() +
+  coord_flip() +
+  scale_y_reverse(expand = expansion(mult = .5)) + 
+  scale_x_continuous(expand = expansion(mult = 0.1))+
+  scale_color_manual(values = month_colors) +   
+  labs(color = "Month")
+
+```
+
+```{r west_cy_absolute, fig.width = 8, fig.height = 4}
+
+wcy_melt %>%
+  group_by(DNA_ID, Station_ID, Family, Month) %>%
+  summarize(Fam_Abund = sum(Abundance)) %>%
+  ungroup() %>%
+  group_by(Family) %>% 
+  mutate(Family = ifelse(max(Fam_Abund) > 10000, Family, "(Rare/Unknown)"),
+         Family = str_remove(Family, "f__"),
+         Family = ifelse(is.na(Family), "(Rare/Unknown)",Family),
+         Family = ifelse(Family == "Microcystaceae_A_24132", "Microcystaceae", Family)) %>%
+  ungroup() %>% 
+  ggplot(aes(y = Fam_Abund, x = Station_ID, fill = Family)) + 
+  geom_col() +
+  scale_fill_manual(values = cyano_family_colors) + 
+  facet_wrap(~Month) + 
+  labs(y = "Absolute Abundance (cells/ml)", x = "Station") + 
+  theme(
+        plot.margin = margin()) + 
+  scale_y_continuous(expand = c(0,0),
+                     labels= scales::unit_format(unit = "M", scale = 1e-6)) 
+
+
+
+ggsave("test.png", width = 8, height = 4)
+```
+
+```{r micro_vs_micro_abs, fig.width = 3, fig.height = 3}
+
+wcy_melt %>%
+  dplyr::filter(Genus == "g__Microcystis") %>%
+  group_by(Sample_ID, Microcystin_Total) %>%
+  summarize(sum_micro = sum(Abundance)) %>%
+  ggplot(aes(x = sum_micro, y = Microcystin_Total)) + 
+  geom_point() + 
+  ggpubr::stat_cor() + 
+  labs(x = "Total Microcystis sp.", y = "Total Microcystins (ug/L)")
+
+
+melt <- psmelt(abs_physeq)
+
+melt %>%
+  dplyr::filter(Genus == "g__Microcystis") %>%
+  group_by(Sample_ID, Microcystin_Total) %>%
+  summarize(sum_micro = sum(Abundance)) %>%
+  ggplot(aes(x = sum_micro, y = Microcystin_Total)) + 
+  geom_point() + 
+  ggpubr::stat_cor() + 
+  labs(x = "Total Microcystis sp.", y = "Total Microcystins (ug/L)")
+
+
+melt %>%
+  dplyr::filter(Genus == "g__Planktothrix") %>%
+  group_by(Sample_ID, Anatoxin_Total) %>%
+  summarize(sum_micro = sum(Abundance)) %>%
+  ggplot(aes(x = sum_micro, y = Anatoxin_Total)) + 
+  geom_point() + 
+  ggpubr::stat_cor() + 
+  labs(x = "Total Planktothrix sp.", y = "Total Anatoxins (ug/L)")
+ggsave("test.png", width = 3, height = 3)
+
+melt %>%
+  dplyr::filter(Genus == "g__Pseudanabaena") %>%
+  group_by(Sample_ID, Anatoxin_Total) %>%
+  summarize(sum_micro = sum(Abundance)) %>%
+  ggplot(aes(x = sum_micro, y = Anatoxin_Total)) + 
+  geom_point() + 
+  ggpubr::stat_cor() + 
+  labs(x = "Total Pseudanabaena sp.", y = "Total Anatoxins (ug/L)")
+
+melt %>%
+  dplyr::filter(Genus == "g__Microcystis") %>%
+  group_by(Sample_ID, Anatoxin_Total) %>%
+  summarize(sum_micro = sum(Abundance)) %>%
+  ggplot(aes(x = sum_micro, y = Anatoxin_Total)) + 
+  geom_point() + 
+  ggpubr::stat_cor() + 
+  labs(x = "Total Microcystis sp.", y = "Total Anatoxins (ug/L)")
+
+melt %>%
+  dplyr::filter(Genus == "g__Dolichospermum") %>%
+  group_by(Sample_ID, Anatoxin_Total) %>%
+  summarize(sum_micro = sum(Abundance)) %>%
+  ggplot(aes(x = sum_micro, y = Anatoxin_Total)) + 
+  geom_point() + 
+  ggpubr::stat_cor() + 
+  labs(x = "Total Dolichospermum sp.", y = "Total Anatoxins (ug/L)")
+
+ggsave("test.png", width = 4, height =4)
+
+
+```
+
+```{r}
+
+wcyano_physeq <- 
+  trim_physeq %>%
+  subset_samples(., Month != "May") %>%
+  subset_samples(., Station_ID %in% c("58", "59","60","61","91","966")) %>%
+  prune_taxa(taxa_sums(.) > 0, .) %>%
+  subset_taxa(., Phylum == "p__Cyanobacteriota") %>%
+      transform_sample_counts(., \(x)x/sum(x)
+) %>%
+  microViz::ps_mutate(N_vs_S = ifelse(Station_ID %in% c("58","59"), "South","North"))
+
+plot_ordination(wcyano_physeq, ordination = ordinate(wcyano_physeq, distance = "bray", method = "PCoA"), color = "N_vs_S")
+
+
+otu_table(wcyano_physeq)
+wcy_melt <- psmelt(wcyano_physeq)
+
+wcyano_bray <- phyloseq::distance(wcyano_physeq, method = "bray")
+
+adonis2(wcyano_bray~N_vs_S, data = data.frame(sample_data(wcyano_physeq)))
+
+wcy_clust <- hclust(wcyano_bray, method = "average")
+
+plot(wcy_clust)
+
+library(ggdendro)
+
+wcy_dend <- as.dendrogram(wcy_clust)
+
+dendro_data(wcy_clust)
+
+dna_id_order <-  ggdendro::dendro_data(wcy_dend)$label$label
+
+sample_annotation <- 
+  wcy_melt %>%
+  select(DNA_ID, Station_ID, Month) %>%
+  unique() %>%
+  mutate(Rep_ID = factor(DNA_ID, levels = dna_id_order))
+
+
+tip_groups <- data.frame(Rep_ID = dendro_data(wcy_dend)$labels$label) %>%
+   left_join(sample_annotation)
+
+dend_data <- dendro_data(wcy_dend)
+
+ggplot(dend_data$segments) + 
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend)) + 
+  geom_text(data = dend_data$labels, aes(x, y, label = tip_groups$Station_ID, color = tip_groups$Month),
+            hjust = 0, size = 8, show.legend = FALSE) +
+  theme_void() +
+  coord_flip() +
+  scale_y_reverse(expand = expansion(mult = .5)) + 
+  scale_x_continuous(expand = expansion(mult = 0.1))+
+  scale_color_manual(values = month_colors) +   
+  labs(color = "Month")
+
+```
+
+```{r west_cy_relative, fig.width = 8, fig.height = 4}
+
+wcy_melt %>%
+  group_by(DNA_ID, Station_ID, Family, Month) %>%
+  summarize(Fam_Abund = sum(Abundance)) %>%
+  ungroup() %>%
+  group_by(Family) %>% 
+  mutate(Family = ifelse(max(Fam_Abund) > 0.01, Family, "(Rare/Unknown)"),
+         Family = str_remove(Family, "f__"),
+         Family = ifelse(is.na(Family), "(Rare/Unknown)",Family),
+         Family = ifelse(Family == "Microcystaceae_A_24132", "Microcystaceae", Family)) %>%
+  ungroup() %>% 
+  ggplot(aes(y = Fam_Abund, x = Station_ID, fill = Family)) + 
+  geom_col() +
+  scale_fill_manual(values = cyano_family_colors) + 
+  facet_wrap(~Month) + 
+  labs(y = "Relative Abundance", x = "Station") + 
+  theme(
+        plot.margin = margin()) + 
+  scale_y_continuous(expand = c(0,0),
+                     labels= scales::label_comma()) 
+
+
+
+
+```
+
+```{r micro_vs_micro_rel, fig.width = 4, fig.height = 4}
+
+wcy_melt %>%
+  dplyr::filter(Genus == "g__Microcystis") %>%
+  group_by(Sample_ID, Microcystin_Total) %>%
+  summarize(sum_micro = sum(Abundance)) %>%
+  ggplot(aes(x = sum_micro, y = Microcystin_Total)) + 
+  geom_point() + 
+  ggpubr::stat_cor()+ 
+  labs(x = "Total Microcystis sp.", y = "Total Microcystins (ug/L)")
+
+
+
+
+```
+
+# Fake data
+
+```{r example-plots, fig.width =5, fig.height = 3}
+
+ggplot(data = data.frame(Sample = factor(c(1,1,2,2)),
+           Species = c("X","Y","X","Y"),
+           Abund = c(0.5,0.5,0.15,0.85)),
+       aes(x = Sample, y = Abund, fill = Species)) + 
+  geom_col() + 
+  labs(y = "Relative Abundance") + 
+  scale_fill_manual(values = c("green4", "steelblue4")) + 
+  scale_y_continuous(expand = expansion(0))
+
+ggplot(data = data.frame(Sample = factor(c(1,1,2,2)),
+           Species = c("X","Y","X","Y"),
+           Abund = c(50,50,50,280)),
+       aes(x = Sample, y = Abund, fill = Species)) + 
+  geom_col() + 
+  labs(y = "Absolute Abundance") + 
+  scale_fill_manual(values = c("green4", "steelblue4")) + 
+  scale_y_continuous(expand = expansion(0))
+
+
+ggplot(data = data.frame(Sample = factor(c(1,1,1,2,2,2)),
+           Species = c("X","Y", "Z","X","Y","Z"),
+           Abund = c(0.45,0.45,0.10,0.495,0.495,0.01)),
+       aes(x = Sample, y = Abund, fill = Species)) + 
+  geom_col() + 
+  labs(y = "Relative Abundance") + 
+  scale_fill_manual(values = c("green4", "steelblue4", "gold1")) + 
+  scale_y_continuous(expand = expansion(0))
+
+ggplot(data = data.frame(Sample = factor(c(1,1,1,2,2,2)),
+           Species = c("X","Y", "Z","X","Y","Z"),
+           Abund = c(45,45,10,5,5,0.0)),
+       aes(x = Sample, y = Abund, fill = Species)) + 
+  geom_col() + 
+  labs(y = "Absolute Abundance") + 
+  scale_fill_manual(values = c("green4", "steelblue4", "gold1")) + 
+  scale_y_continuous(expand = expansion(0))
+
+
+ggsave("test.png", width = 5, height = 3)
+
+```
+
+# Central Basin Hypoxia
+
+```{r}
+
+ctds <- read_csv("data/05_Metadata_Curation/all_ctd_summary.csv")
+
+sam_data <- 
+  abs_physeq %>%
+  sample_data() %>%
+  data.frame()
+
+central_data <- sam_data %>%
+  select(DNA_ID, Station_ID, Month, Month, Depth_Class, Rep_ID, Basin, avg_cells_per_ml, rsg_pos_per_ml, rsg_perc_pos, rsg_mfi) %>%
+  left_join(ctds) %>%
+  mutate(ctd_temp = case_when(Depth_Class == "S" ~ surf_temperature,
+                              Depth_Class == "B" ~ bottom_temperature),
+         ctd_oxy = case_when(Depth_Class == "S" ~ surf_oxygen,
+                              Depth_Class == "B" ~ bottom_oxygen)) %>%
+   select(DNA_ID, Station_ID, Month, Month, Depth_Class, Rep_ID, Basin, avg_cells_per_ml, rsg_pos_per_ml, rsg_perc_pos, rsg_mfi, ctd_temp, ctd_oxy) %>%
+  mutate(hypoxic = ifelse(ctd_oxy < 4, "Hypoxic","Oxic")) %>%
+  filter(Month != "May", Basin == "C")
+
+central_data %>%
+  ggplot(aes(x = ctd_oxy, y = rsg_mfi)) + 
+  geom_point()
+central_data %>%
+  ggplot(aes(x = ctd_oxy, y = rsg_perc_pos)) + 
+  geom_point()
+central_data %>%
+  ggplot(aes(x = ctd_oxy, y = rsg_pos_per_ml)) + 
+  geom_point()
+
+
+# Neat
+
+central_stations <- central_data$Station_ID
+
+central_physeq <- abs_physeq %>%
+  subset_samples(Month != "May") %>%
+  subset_samples(Basin == "C") %>%
+  microViz::ps_join(central_data)
+
+plot_ordination(central_physeq, ordinate(central_physeq, method = "PCoA"), color = "hypoxic", shape = "Month") + 
+  geom_point(size = 4, alpha = 0.7) 
+
+plot_ordination(central_physeq, ordinate(central_physeq, method = "PCoA"), color = "Depth_Class", shape = "Month") + 
+  geom_point(size = 4, alpha = 0.7) + 
+  geom_text(aes(label = Station_ID))
+
+
+cent_dist <- phyloseq::distance(central_physeq, "bray")
+
+cent_clust <- hclust(cent_dist, method = "average")
+
+cent_dendro <- as.dendrogram(cent_clust)
+
+dna_id_order <-  ggdendro::dendro_data(cent_dendro)$label$label
+
+sample_annotation <- 
+  central_data %>%
+  mutate(DNA_ID = factor(DNA_ID, levels = dna_id_order))
+
+hypoxic_plot <- sample_annotation %>%
+  ggplot(aes(x=1, y = DNA_ID)) + 
+  geom_tile(aes(fill = hypoxic)) + 
+  scale_fill_manual(values = c("#B9741F", "#990006"), name = "Oxygen") + 
+  theme_void()+ 
+  theme(legend.position = "left")
+
+month_plot <- sample_annotation %>%
+  ggplot(aes(x=1, y = DNA_ID)) + 
+  geom_tile(aes(fill = Month)) + 
+  scale_fill_manual(values = month_colors, name = "Month") + 
+  theme_void()+ 
+  theme(legend.position = "left")
+
+barplot <- central_physeq %>%
+  psmelt() %>%
+    mutate(DNA_ID = factor(DNA_ID, levels = dna_id_order)) %>%
+  group_by(DNA_ID, Class) %>%
+  summarize(Class_Abund = sum(Abundance)) %>%
+  ungroup() %>%
+  group_by(Class) %>%
+  mutate(Class = ifelse(max(Class_Abund) > 30000, Class, "(Rare)"),
+         Class = str_remove(Class, "c__")) %>%
+  ungroup() %>% 
+  ggplot(aes(x = Class_Abund, y = DNA_ID, fill = Class)) + 
+  geom_col() +
+  scale_fill_manual(values = class_colors) + 
+  labs(x = "Absolute Abundance") + 
+  theme(axis.title.y = element_blank(),
+        axis.text.y= element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.line.y= element_blank(),
+        plot.margin = margin()) + 
+  scale_x_continuous(expand = c(0,0))
+
+month_plot  + hypoxic_plot + barplot +
+  plot_layout(nrow = 1, 
+              widths = c(1,1, 16),
+              guides = "collect") & 
+  theme(legend.position = "left")
+
+gamma_colors <- c(
+  "(Rare)" = "grey90",
+  "Arenimonas_613591" = "gold1",
+  "Azonexus" = "green4",
+  "Limnohabitans_A" = "#FB9A99",
+  "Methylobacter_C_601048" = "blue1",
+  "Methylopumilus_A_558053" = "darkturquoise",
+  "Nitrotoga" = "olivedrab1",
+  "Rhodoferax_C" = "#FF7F00",
+  "Sulfuritalea" = "#6A3D9A",
+  "Sideroxyarcus" = "maroon"
+)
+
+barplot <- central_physeq %>%
+  psmelt() %>%
+    mutate(DNA_ID = factor(DNA_ID, levels = dna_id_order)) %>%
+  filter(Class == "c__Gammaproteobacteria") %>%
+  group_by(DNA_ID, Genus) %>%
+  summarize(Class_Abund = sum(Abundance)) %>%
+  ungroup() %>%
+  group_by(Genus) %>%
+  mutate(Class = ifelse(max(Class_Abund) > 100000, Genus, "(Rare)"),
+         Class = str_remove(Class, "g__")) %>%
+  ungroup() %>% 
+  ggplot(aes(x = Class_Abund, y = DNA_ID, fill = Class)) + 
+  geom_col() +
+  labs(x = "Absolute Abundance") + 
+  scale_fill_manual(values = gamma_colors) + 
+  theme(axis.title.y = element_blank(),
+        axis.text.y= element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.line.y= element_blank(),
+        plot.margin = margin()) + 
+  scale_x_continuous(expand = c(0,0))
+
+month_plot  + hypoxic_plot + barplot +
+  plot_layout(nrow = 1, 
+              widths = c(1,1, 16),
+              guides = "collect") & 
+  theme(legend.position = "left")
+```

@@ -1,0 +1,86 @@
+java -Djava.library.path=/workdir/arp277/2022_Muskegon_GrowthRate/miniconda3/envs/bbmap-env/opt/bbmap-38.22-0/jni/ -ea -Xmx100g -cp /workdir/arp277/2022_Muskegon_GrowthRate/miniconda3/envs/bbmap-env/opt/bbmap-38.22-0/current/ align2.BBSplitter ow=t fastareadlen=500 minhits=1 minratio=0.56 maxindel=20 qtrim=rl untrim=t trimq=6 usequality=f qtrim=f minratio=0.30 minid=0.30 pairedonly=f threads=20 -Xmx100g path=code/mcnichol_split_scripts/bbsplit_db/EUK-PROK-bbsplit-db/ in=data/mcnichol-trimmed/Plate01_D02_KH_D012_10480167_AAGJLJNM5.R1.trimmed.fastq in2=data/mcnichol-trimmed/Plate01_D02_KH_D012_10480167_AAGJLJNM5.R2.trimmed.fastq basename=Plate01_D02_KH_D012_10480167_AAGJLJNM5.trimmed.%_#.fastq
+Executing align2.BBSplitter [ow=t, fastareadlen=500, minhits=1, minratio=0.56, maxindel=20, qtrim=rl, untrim=t, trimq=6, usequality=f, qtrim=f, minratio=0.30, minid=0.30, pairedonly=f, threads=20, -Xmx100g, path=code/mcnichol_split_scripts/bbsplit_db/EUK-PROK-bbsplit-db/, in=data/mcnichol-trimmed/Plate01_D02_KH_D012_10480167_AAGJLJNM5.R1.trimmed.fastq, in2=data/mcnichol-trimmed/Plate01_D02_KH_D012_10480167_AAGJLJNM5.R2.trimmed.fastq, basename=Plate01_D02_KH_D012_10480167_AAGJLJNM5.trimmed.%_#.fastq]
+
+Merged reference file code/mcnichol_split_scripts/bbsplit_db/EUK-PROK-bbsplit-db/ref/genome/1/merged_ref_1759910411204350.fa.gz already exists; skipping merge.
+Ref merge time:     	0.016 seconds.
+Executing align2.BBMap [ow=t, fastareadlen=500, minhits=1, minratio=0.56, maxindel=20, qtrim=rl, untrim=t, trimq=6, usequality=f, qtrim=f, minratio=0.30, minid=0.30, pairedonly=f, threads=20, in=data/mcnichol-trimmed/Plate01_D02_KH_D012_10480167_AAGJLJNM5.R1.trimmed.fastq, in2=data/mcnichol-trimmed/Plate01_D02_KH_D012_10480167_AAGJLJNM5.R2.trimmed.fastq, ref=code/mcnichol_split_scripts/bbsplit_db/EUK-PROK-bbsplit-db/ref/genome/1/merged_ref_1759910411204350.fa.gz, out_SILVA_132_and_PR2_EUK.cdhit95pc=Plate01_D02_KH_D012_10480167_AAGJLJNM5.trimmed.SILVA_132_and_PR2_EUK.cdhit95pc_#.fastq, out_SILVA_132_PROK.cdhit95pc=Plate01_D02_KH_D012_10480167_AAGJLJNM5.trimmed.SILVA_132_PROK.cdhit95pc_#.fastq]
+Version 38.22
+
+Set MINIMUM_ALIGNMENT_SCORE_RATIO to 0.560
+Set MINIMUM_ALIGNMENT_SCORE_RATIO to 0.300
+Set threads to 20
+Retaining first best site only for ambiguous mappings.
+Set MINIMUM_ALIGNMENT_SCORE_RATIO to 0.100
+NOTE:	Ignoring reference file because it already appears to have been processed.
+NOTE:	If you wish to regenerate the index, please manually delete code/mcnichol_split_scripts/bbsplit_db/EUK-PROK-bbsplit-db/ref/genome/1/summary.txt
+Set genome to 1
+
+Loaded Reference:	0.606 seconds.
+Loading index for chunk 1-1, build 1
+Generated Index:	0.629 seconds.
+Analyzed Index:   	1.733 seconds.
+Cleared Memory:    	0.251 seconds.
+Processing reads in paired-ended mode.
+Started read stream.
+Started 20 mapping threads.
+Detecting finished threads: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
+
+   ------------------   Results   ------------------   
+
+Genome:                	1
+Key Length:            	13
+Max Indel:             	20
+Minimum Score Ratio:  	0.1
+Mapping Mode:         	normal
+Reads Used:           	2057492	(579183998 bases)
+
+Mapping:          	580.996 seconds.
+Reads/sec:       	3541.32
+kBases/sec:      	996.88
+
+
+Pairing data:   	pct pairs	num pairs 	pct bases	   num bases
+
+mated pairs:     	 89.8766% 	   924602 	 90.0362% 	   521475528
+bad pairs:       	  7.8087% 	    80332 	  7.8226% 	    45307248
+insert size avg: 	  404.37
+
+
+Read 1 data:      	pct reads	num reads 	pct bases	   num bases
+
+mapped:          	 98.5070% 	  1013387 	 98.5070% 	   285775134
+unambiguous:     	 62.4843% 	   642805 	 62.4843% 	   181271010
+ambiguous:       	 36.0227% 	   370582 	 36.0227% 	   104504124
+low-Q discards:  	  0.0000% 	        0 	  0.0000% 	           0
+
+perfect best site:	 24.1428% 	   248368 	 24.1428% 	    70039776
+semiperfect site:	 24.2231% 	   249194 	 24.2231% 	    70272708
+rescued:         	  0.0530% 	      545
+
+Match Rate:      	      NA 	       NA 	 97.4343% 	   278619896
+Error Rate:      	 67.8608% 	   687693 	  2.4109% 	     6894215
+Sub Rate:        	 63.9718% 	   648282 	  2.2908% 	     6550805
+Del Rate:        	  7.6780% 	    77808 	  0.0635% 	      181533
+Ins Rate:        	  6.9877% 	    70812 	  0.0566% 	      161877
+N Rate:          	 24.3605% 	   246866 	  0.1548% 	      442556
+
+
+Read 2 data:      	pct reads	num reads 	pct bases	   num bases
+
+mapped:          	 98.1695% 	  1009915 	 98.1695% 	   283786115
+unambiguous:     	 62.1473% 	   639338 	 62.1473% 	   179653978
+ambiguous:       	 36.0222% 	   370577 	 36.0222% 	   104132137
+low-Q discards:  	  0.0000% 	        0 	  0.0000% 	           0
+
+perfect best site:	 16.7729% 	   172551 	 16.7729% 	    48486831
+semiperfect site:	 17.1130% 	   176049 	 17.1130% 	    49469769
+rescued:         	  0.0855% 	      880
+
+Match Rate:      	      NA 	       NA 	 97.1497% 	   275979305
+Error Rate:      	 76.2405% 	   769964 	  2.7164% 	     7716535
+Sub Rate:        	 74.0317% 	   747657 	  2.5242% 	     7170591
+Del Rate:        	 10.0184% 	   101177 	  0.1022% 	      290307
+Ins Rate:        	  7.9400% 	    80187 	  0.0900% 	      255637
+N Rate:          	 25.2921% 	   255429 	  0.1340% 	      380582
+
+Total time:     	584.261 seconds.

@@ -1,0 +1,155 @@
+---
+title: "Assess Errors and Contamination" 
+author: "Augustus Pendleton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+knitr: 
+  opts_chunk: 
+    fig.path: ../figures/03a_Eukaryotic_Errors_and_Contamination/
+editor_options: 
+  chunk_output_type: console
+---
+
+
+# Goals of our Pre-Processing File
+
+We will work here in this document to remove any unnecessary ASVs or samples, such as: 
+
+1. Mitochondria or plastids (unlikely)
+2. Contamination within our blanks
+3. Domain Bacteria
+4. Splitting metazoans away
+
+## Load Packages and Functions
+
+```{r load-packages-functions}
+# Load Packages
+pacman::p_load(phyloseq, Biostrings, dada2, microViz, tidyverse, install = FALSE)
+
+source("code/R/plotting_aesthetics.R")
+
+```
+
+## Load the data!
+
+```{r load-data}
+# Load in the raw_phyloseq data from DADA2_workflow.Rmd
+load("data/02a_Eukaryotic_Taxonomic_Classification/raw_euk_physeq.RData")
+
+raw_euk_physeq
+
+load("data/01a_Eukaryotic_Denoising/track_df_euk.RData")
+
+```
+
+# Add metadata to physeq
+
+```{r add-metadata}
+
+sample_data(raw_euk_physeq) <- track_df_euk
+
+```
+
+
+# Looking at bacteria
+
+```{r finding-bacteria}
+
+tax_df <- 
+raw_euk_physeq %>%
+  tax_table() %>%
+  data.frame()
+
+tax_df %>%
+  count(Domain)
+
+tax_df %>%
+  filter(Domain == "Eukaryota:nucl")
+
+tax_df %>%
+  filter(Species == "Plagioselmis_lacustris")
+
+tax_df %>%
+  filter(Species == "Cryptomonas_curvata")
+```
+
+We'll definitley remove the one bacteria, and probably the two which have an NA domain, but I'm unsure what to do about the nucleomorphs. I'm assuming they'll make the tree look quite crazy (potentially interfering with downstream analyses). Are we also "counting" these species 2X then? Doesn't seem so for the Plagioformis, but it does for the Cryptomonas species. 
+
+# Remove unnecessary taxa
+
+We will need to remove the ASVs that are mitochondria or chloroplast
+
+## Remove Control samples 
+
+Next, we will need to remove ASVs that seem to be contamination based on our controls. But guess what? None of our control samples survived with enough reads from either cutadapt or filterandTrim, so those samples are null. 
+
+```{r rm-controls, out.width="100%"}
+
+control_samples <- c("KH_D024", "KH_D048", "KH_D049", "KH_D050", "KH_D084", "KH_D085", "KH_D085")
+
+sample_names(raw_euk_physeq) %in% control_samples
+
+```
+
+# Evaluating Accuracy
+
+I compare which ASVs I observe in our mock sequencing compared to which ASVs should be present
+
+```{r eval-accuracy}
+# Check the mock commmunity 
+mock_physeq <- raw_euk_physeq %>%
+  subset_samples(.,(DNA_ID=="ZYMO_MOCK")) %>%
+  prune_taxa(taxa_sums(.) > 0, .)
+
+tax_table(mock_physeq)[,1:9] # Look at what taxa are there
+
+otu_matrix <- otu_table(mock_physeq) %>% as.matrix() # Will use this matrix later
+
+cat("DADA2 inferred", ntaxa(mock_physeq), "ASVs present in the Mock Community.")
+
+
+#Who are they in the mock community? 
+
+mock_seqs <- tax_table(mock_physeq) %>%
+  as.data.frame() %>%
+  select(ASV, ASVseqs)
+
+```
+
+We're looking for Saccharomyces cerevisiae and Cryptococcus neoformans, which our classification at least doesn't quite match. However when I blast both those sequences, I get those pieces as 100% hits, so I feel good about our error rate (zero, supposedly). Let's remove the mock, non-Eukaryota domains, and save our new physeq.
+
+```{r remove-mock}
+
+preprocessed_physeq <- raw_euk_physeq %>%
+  subset_taxa(Domain == "Eukaryota") %>%
+  subset_samples(.,(DNA_ID!="ZYMO_MOCK")) %>%
+  prune_taxa(taxa_sums(.) > 0, .) 
+
+preprocessed_meta_physeq <- 
+  preprocessed_physeq %>%
+  subset_taxa(Subdivision == "Metazoa") %>%
+  prune_samples(sample_sums(.)>0, .)
+
+preprocessed_meta_physeq
+
+preprocessed_euk_physeq <- 
+  preprocessed_physeq %>%
+  subset_taxa(Subdivision != "Metazoa") %>%
+  prune_samples(sample_sums(.)>0, .)
+
+preprocessed_euk_physeq
+```
+
+
+# Save preprocessed phyloseq!
+```{r save-physeq}
+save(preprocessed_euk_physeq, file = "data/03a_Eukaryotic_Errors_and_Contamination/preprocessed_euk_physeq.RData")
+
+save(preprocessed_meta_physeq, file = "data/03a_Eukaryotic_Errors_and_Contamination/preprocessed_meta_physeq.RData")
+```
+
+
+# Session Information 
+```{r}
+# Reproducibility
+devtools::session_info()
+```

@@ -1,0 +1,375 @@
+---
+title: "Prokaryotic Errors and Contamination" 
+author: "Augustus Pendleton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+knitr: 
+  opts_chunk: 
+    fig.path: ../figures/03b_Prokaryotic_Errors_and_Contamination/
+editor_options: 
+  chunk_output_type: console
+---
+
+
+# Goals of our Pre-Processing File
+
+We will work here in this document to remove any unnecessary ASVs, including assessing contamination from our blanks, and error rates from our mock community.
+
+## Load Packages and Functions
+
+```{r load-packages-functions}
+# Load Packages
+pacman::p_load(phyloseq, Biostrings, dada2, microViz, tidyverse, install = FALSE)
+
+source("code/R/plotting_aesthetics.R")
+
+```
+
+## Load the data!
+
+```{r load-data}
+# Load in the raw_phyloseq data from DADA2_workflow.Rmd
+load("data/02b_Prokaryotic_Taxonomic_Classification/raw_prok_physeq_noplas.RData")
+load("data/02b_Prokaryotic_Taxonomic_Classification/raw_prok_plas_physeq.RData")
+
+raw_prok_physeq_noplas
+raw_plas_physeq
+
+load("data/01b_Prokaryotic_Denoising/track_df_final.RData")
+
+```
+
+# Add metadata to physeq
+
+```{r add-metadata}
+
+sample_data(raw_prok_physeq_noplas) <- track_df_final
+sample_data(raw_plas_physeq) <- track_df_final
+
+```
+
+# Remove unnecessary taxa
+
+We will need to remove the ASVs that are mitochondria or chloroplast
+
+```{r rm-ASVs}
+# Make a new phyloseq object without the mitochondria, chloroplast or mock community
+
+noMitoChloro_physeq <- 
+  raw_prok_physeq_noplas %>%
+  # Remove the mitochondria ASVs.  #NOTE THERE WAS A TYPO HERE IN CLASS! 
+  subset_taxa(Family != "Mitochondria" | is.na(Family)) %>%
+  # Remove the chloroplast ASVs 
+  subset_taxa( Order !="Chloroplast" | is.na(Order)) %>%
+  # # remove the mock community and its ASVs 
+  # prune_samples(!sample_names(.) %in% c("Zymo_Mock"), .) %>%
+  # Now we will remove any ASVs of count 0
+  prune_taxa(taxa_sums(.) > 0, .)
+
+# Let's take a look 
+noMitoChloro_physeq
+
+# How many taxa have we removed so far? 
+num_ASVs_rm <- ntaxa(raw_prok_physeq_noplas) - ntaxa(noMitoChloro_physeq)
+cat("We removed ", num_ASVs_rm, " ASVs")
+
+# Proportion of original data maintained
+prop_ASV_rm <- 100* ntaxa(noMitoChloro_physeq)/ntaxa(raw_prok_physeq_noplas)
+cat("We retained ", prop_ASV_rm, "% of taxa")
+```
+
+
+## Remove Control samples 
+
+Next, we will need to remove ASVs that seem to be contamination based on our controls
+
+```{r rm-controls, out.width="100%"}
+#3. Control samples.  
+# Create a vector with the control samples 
+
+control_samples <- c("KH_D024", "KH_D048", "KH_D049", "KH_D050", "KH_D084", "KH_D085", "KH_D085", "PCR_BLANK")
+
+# Which taxa are in the control samples? 
+control_physeq <- 
+  noMitoChloro_physeq %>%
+  # Identify control samples
+  subset_samples(., (DNA_ID %in% control_samples)) %>%
+  # make sure to remove the ASVs that were not in the controls 
+  prune_taxa(taxa_sums(.) > 0, .)
+
+# Check out the phyloseq object 
+control_physeq
+
+# vector of control ASVs
+control_ASVs <- 
+  data.frame(control_physeq@tax_table)$ASV
+
+# Plot the abundance of control ASVs across the 4 samples 
+control_physeq %>%
+  plot_bar(., "ASV", fill = "ASV")
+
+# Plot the abundance of control ASVs across the 4 samples 
+control_physeq %>%
+  plot_bar(., "ASV", fill = "DNA_ID")
+
+
+ # Make a phyloseq object with only the control ASVs in it 
+ controlASVs_physeq <- 
+   noMitoChloro_physeq %>%
+   subset_taxa(., ASV %in% control_ASVs)
+ 
+ # Check it out
+ controlASVs_physeq
+ 
+ # Let's take a look at the plot 
+  controlASVs_physeq %>%
+   ps_mutate(Sample_or_Control = ifelse(DNA_ID%in%control_samples, "Control","Sample")) %>%
+   plot_bar(., "Sample_or_Control", fill="Sample_or_Control")+ 
+  facet_wrap(~ASV, scales = "free") + 
+   labs(title = "All Control ASV Abundance in Samples vs Controls") 
+  
+sample_sums(controlASVs_physeq)
+ 
+controlASVs_physeq %>% tax_table() 
+
+asvs_to_remove <- c("PROK_18031", "PROK_78")
+```
+
+We should definitely remove both of these ASVs. one of them is represented by literally one read, inside a control. The other is pretty much exclusively represented by the Mock community. I'm going to wait to remove this one. because it will probably be important for assessing error, but it will get removed at the end. 
+
+# Evaluating Accuracy
+
+I compare which ASVs I observe in our mock sequencing compared to which ASVs should be present. 
+
+```{r prepare-mock-amplicons}
+
+all_mocks <- readDNAStringSet("data/03b_Prokaryotic_Errors_and_Contamination/mock_fastas/all_mock_ssrRNAs.fasta") # Read in the ssrRNA and whole genome (for yeasts) sequences provided by Zymo
+primers <- readDNAStringSet("data/03b_Prokaryotic_Errors_and_Contamination/mock_fastas/primers.fasta") # These are the primers we used
+
+# For murky reasons (and a big pain in my butt), the matchProbePair function from
+# biostrings (which would let me anticipate the amplicon sequences produced by primers)
+# does not allow degeneracy, even though the underlying matchPattern function that it uses does
+# Anyways I source a script which defines a good matchProbePair function that does allow degeneracy. 
+
+source("code/R/good_matchProbePair.R") 
+
+amps <- map(all_mocks, function(dna)matchProbePair(primers[[1]], primers[[2]], dna, fixed=FALSE)%>%
+              DNAStringSet()) # Predict amplicon sequences (with primers) for our mocks
+amps
+
+unique_seqs <-DNAStringSetList(amps)%>%
+  unlist() %>% 
+  unique() 
+
+# Let's also make sure that some aren't in the reverse complement orientation
+c(reverseComplement(unique_seqs), unique_seqs) %>%
+  writeXStringSet("data/03b_Prokaryotic_Errors_and_Contamination/mock_fastas/mock_amplicons.fasta") # Write this to a fasta
+```
+
+```{r eval-accuracy}
+# Check the mock commmunity 
+mock_physeq <- noMitoChloro_physeq %>%
+  subset_samples(.,(DNA_ID=="ZYMO_MOCK")) %>%
+  prune_taxa(taxa_sums(.) > 0, .)
+
+tax_table(mock_physeq)[,1:8] # Look at what taxa are there
+
+otu_matrix <- otu_table(mock_physeq) %>% as.matrix() # Will use this matrix later
+
+cat("DADA2 inferred", ntaxa(mock_physeq), "ASVs present in the Mock Community.")
+
+# Who are they in the mock community? 
+
+mock_seqs <- tax_table(mock_physeq) %>%
+  as.data.frame() %>%
+  select(ASV, ASVseqs)
+
+
+#### Compare our ASVs from the mock community to the reference fasta!
+mock_reference <- getSequences("data/03b_Prokaryotic_Errors_and_Contamination/mock_fastas/mock_amplicons.fasta")
+
+matches <- mock_seqs %>%
+  rowwise() %>%
+  mutate(Match = any(str_detect(mock_reference, ASVseqs))) # Check each asv to the mock references
+
+match_asv <- matches %>%
+  filter(Match) %>%
+  pull(ASV) # Pull out asvs that did match reference
+
+nonmatch_asv <- matches %>%
+  filter(!Match) %>%
+  pull(ASV) # Pull out asvs that didn't match reference
+
+total_mock_reads <- sum(otu_matrix)
+matched_reads <- sum(otu_matrix[match_asv])
+err_reads <- sum(otu_matrix[nonmatch_asv])
+
+top_err_reads <- max(otu_matrix[nonmatch_asv])
+
+
+cat("DADA2 inferred ", length(nonmatch_asv), "erroneous ASVs out of the mock community")
+
+err_rate <- err_reads/total_mock_reads
+
+cat("Erroneous matches represented ", 100* err_rate, "% of total reads in the mock")
+
+max_nonmatch <- top_err_reads / total_mock_reads
+
+otu_matrix[match_asv]
+otu_matrix[nonmatch_asv]
+
+
+```
+
+There were 8 erroneous ASVs inferred, with no taxonomy assigned below Bacteria. They also don't look anything like the other mock sequences. Our error rate was pretty good at `r 100*err_rate`%. The largest number of reads for an erroneous ASV was `r top_err_reads` reads, which corresponded to a relative abundance of `r 100*max_nonmatch`%. This makes me a little uneasy that some rare ASVs shouldn't be trusted. MiSeq data from Lake Ontario (which admittedly may be less diverse than the more variable/productive Lake Erie) had ~8,000 ASVs, so some of these erroneous ASVs could be from our deeper sequencing depth and binned quality scores. That said, deeper sequencing depth should allow us to find more ASVs overall, so it's reasonable that we will have more ASVs in this dataset. Overall, we're going to enter into a grey area in terms of how many ASVs we want to maintain. 
+
+So we're gonna test some combinations of prevalence and abundance that will give us a little more confidence if we do want to work with some rare taxa.
+
+# Remove ASVs too rare to be trustworthy
+
+First, let's get rid of our control samples, mock, and contamination ASVs
+
+```{r check-max-abundance}
+
+no_control_mock_physeq <- 
+  noMitoChloro_physeq %>%
+  subset_taxa(!ASV %in% asvs_to_remove) %>%
+  subset_samples(.,(DNA_ID!="ZYMO_MOCK")) %>%
+  subset_samples(.,!DNA_ID %in% control_samples) %>%
+  prune_taxa(taxa_sums(.) > 0, .) 
+
+max_abund <- no_control_mock_physeq %>%
+  otu_table() %>%
+  as.matrix() %>%
+  apply(1,max) 
+
+ggplot(data.frame(reads = max_abund), aes(x = reads)) + 
+  geom_histogram() + 
+  scale_x_log10()
+
+
+ggplot(data.frame(reads = max_abund), aes(x = reads)) + 
+  geom_histogram() + 
+  scale_x_log10(limits = c(1,10))
+
+```
+
+This is actually a far less skewed distribution than we saw on previous NextSeq data from the ponds - taxa are comparably less rare/fewer doublets.
+
+
+```{r check-prevalence}
+otu_matrix <- otu_table(no_control_mock_physeq) %>%
+  as.matrix()
+
+rowSums( otu_matrix > 0) %>%
+  data.frame(samples_observed = .) %>%
+  ggplot(aes(x = samples_observed)) + 
+  geom_histogram()
+
+prev_vector <- rowSums( otu_matrix > 0)
+
+prev_vector %>%
+  data.frame(samples_observed = .) %>%
+  ggplot(aes(x = samples_observed)) + 
+  geom_histogram() + 
+  scale_x_continuous(limits = c(0,10))
+```
+
+WOW - that said, a majority of ASVs are only observed in a single sample.
+
+```{r prevalence-vs-abundance}
+
+stopifnot(all(names(max_abund) == names(prev_vector)))
+
+expand.grid(c(2:10), c(1:10)) %>%
+  rename(Min_Abund = Var1, Min_Samples = Var2) %>%
+  rowwise()%>%
+  mutate(ASVs = sum(max_abund >= Min_Abund & prev_vector >= Min_Samples)) %>%
+  ggplot(aes(x = Min_Abund, y = Min_Samples,
+             label = ASVs, fill = ASVs)) + 
+  geom_tile() + 
+  geom_text(size = 3, aes(color = ASVs > 13000), show.legend = FALSE)  +
+  scale_fill_viridis_c(option = "inferno") + 
+  scale_color_manual(values = c("white","black")) + 
+  theme(legend.position = "none")
+
+stopifnot(all(names(taxa_sums(no_control_mock_physeq))==names(max_abund)))
+
+expand.grid(c(2:10), c(1:10)) %>%
+  rename(Min_Abund = Var1, Min_Samples = Var2) %>%
+  rowwise()%>%
+  mutate(ASVs = sum(taxa_sums(no_control_mock_physeq)[max_abund >= Min_Abund & prev_vector >= Min_Samples])/sum(taxa_sums(no_control_mock_physeq)),
+         ASVs = round(ASVs, 4)) %>%
+  ggplot(aes(x = Min_Abund, y = Min_Samples,
+             label = ASVs, fill = ASVs)) + 
+  geom_tile() + 
+  geom_text(size = 3, aes(color = ASVs > .99), show.legend = FALSE)  +
+  scale_fill_viridis_c(option = "inferno") + 
+  scale_color_manual(values = c("white","black")) + 
+  theme(legend.position = "none")
+
+
+```
+
+Okay, what are we thinking here. I'm a little conflicted because previously, rare taxa were really important in our Lake Ontario story - we found that certain upwelling zones were highly enriched in rare taxa, which feels important. If I cut by prevalence, we lose our ability to see those "unique" samples. Perhaps it's more reasonable to cut by a minimum abundance (must have observed it at least 5 times) but allow it to have only been observed in a single sample. With the ponds, since we were sampling so often and they were so close to each other, it felt reasonable that an ASV should be shared between them - here, since Lake Erie is so large, the opportunity for ASVs to be present in a single sample feels logical. So with that in mind, I'm going to set a minimum max abundance filter of 8 (so that we retain 0.999% of total reads) and drop our ASV count to 10,774 ASVs.
+
+```{r remove-rare-asvs}
+
+nonrare_taxa <- taxa_names(no_control_mock_physeq)[max_abund >= 8]
+
+preprocessed_prok_physeq <- no_control_mock_physeq %>%
+  subset_taxa(ASV %in% nonrare_taxa) %>%
+  prune_taxa(taxa_sums(.) > 0, .) %>%
+  prune_samples(sample_sums(.) > 0, .)
+
+preprocessed_prok_physeq_nomin <- no_control_mock_physeq %>%
+  prune_taxa(taxa_sums(.) > 0, .) %>%
+  prune_samples(sample_sums(.) > 0, .)
+
+preprocessed_prok_physeq %>%
+  otu_table() %>%
+  as.matrix() %>%
+  apply(1,max) %>%
+  data.frame(reads = .) %>%
+  ggplot(aes(x = reads)) + 
+  geom_histogram() + 
+  scale_x_log10()
+
+```
+
+
+# Save preprocessed phyloseq!
+```{r save-physeq}
+save(preprocessed_prok_physeq, file = "data/03b_Prokaryotic_Errors_and_Contamination/preprocessed_prok_physeq.RData")
+save(preprocessed_prok_physeq_nomin, file = "data/03b_Prokaryotic_Errors_and_Contamination/preprocessed_prok_physeq_nomin.RData")
+```
+
+# Looking at plastid physeq
+
+```{r plastid-physeq-cleaning}
+
+raw_plas_physeq %>%
+  subset_samples(., (DNA_ID %in% c(control_samples, "ZYMO_MOCK"))) %>%
+  taxa_sums() %>% 
+  sum()
+
+```
+
+Our plastid physeq didn't have any reads in the control samples or the mock community, so we can remove these. I'm not going to test about error rate or set a prevalence/abundance cut-off here either. 
+
+
+```{r preprocessed-plastid}
+
+preprocessed_plas_physeq <- 
+  raw_plas_physeq %>%
+  prune_samples(sample_sums(.) > 0, .) %>%
+  prune_taxa(taxa_sums(.) > 0, .)
+
+save(preprocessed_plas_physeq, file = "data/03b_Prokaryotic_Errors_and_Contamination/preprocessed_plas_physeq.RData")
+
+```
+
+# Session Information 
+```{r}
+# Reproducibility
+devtools::session_info()
+```

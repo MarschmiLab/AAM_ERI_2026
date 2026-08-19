@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.450">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Augustus Pendleton">
+<meta name="dcterms.date" content="2025-04-16">
+
+<title>Denoising Eukaryotic Reads</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="01a_Eukaryotic_Denoising_files/libs/clipboard/clipboard.min.js"></script>
+<script src="01a_Eukaryotic_Denoising_files/libs/quarto-html/quarto.js"></script>
+<script src="01a_Eukaryotic_Denoising_files/libs/quarto-html/popper.min.js"></script>
+<script src="01a_Eukaryotic_Denoising_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="01a_Eukaryotic_Denoising_files/libs/quarto-html/anchor.min.js"></script>
+<link href="01a_Eukaryotic_Denoising_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="01a_Eukaryotic_Denoising_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="01a_Eukaryotic_Denoising_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="01a_Eukaryotic_Denoising_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="01a_Eukaryotic_Denoising_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article toc-left">
+<div id="quarto-sidebar-toc-left" class="sidebar toc-left">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul class="collapse">
+  <li><a href="#loading-r-packages" id="toc-loading-r-packages" class="nav-link active" data-scroll-target="#loading-r-packages">Loading R packages</a></li>
+  <li><a href="#assessing-quality" id="toc-assessing-quality" class="nav-link" data-scroll-target="#assessing-quality">Assessing Quality</a></li>
+  <li><a href="#filter-and-trim" id="toc-filter-and-trim" class="nav-link" data-scroll-target="#filter-and-trim">Filter and Trim</a></li>
+  <li><a href="#fuse-our-reads" id="toc-fuse-our-reads" class="nav-link" data-scroll-target="#fuse-our-reads">Fuse our reads</a></li>
+  <li><a href="#look-at-fused-quality" id="toc-look-at-fused-quality" class="nav-link" data-scroll-target="#look-at-fused-quality">Look at fused quality</a></li>
+  <li><a href="#generate-an-error-model" id="toc-generate-an-error-model" class="nav-link" data-scroll-target="#generate-an-error-model">Generate an error model</a></li>
+  <li><a href="#inferring-asvs-on-the-forward-and-reverse-sequences" id="toc-inferring-asvs-on-the-forward-and-reverse-sequences" class="nav-link" data-scroll-target="#inferring-asvs-on-the-forward-and-reverse-sequences">Inferring ASVs on the forward and reverse sequences</a></li>
+  <li><a href="#generate-a-count-table" id="toc-generate-a-count-table" class="nav-link" data-scroll-target="#generate-a-count-table">Generate a count table!</a></li>
+  <li><a href="#check-remove-for-chimeras-bimeras" id="toc-check-remove-for-chimeras-bimeras" class="nav-link" data-scroll-target="#check-remove-for-chimeras-bimeras">Check &amp; Remove for Chimeras (Bimeras)</a></li>
+  <li><a href="#track-the-sequences-through-the-pipeline" id="toc-track-the-sequences-through-the-pipeline" class="nav-link" data-scroll-target="#track-the-sequences-through-the-pipeline">Track the sequences through the pipeline</a></li>
+  <li><a href="#prepare-the-data-for-export" id="toc-prepare-the-data-for-export" class="nav-link" data-scroll-target="#prepare-the-data-for-export">Prepare the data for export!</a>
+  <ul class="collapse">
+  <li><a href="#asv-table" id="toc-asv-table" class="nav-link" data-scroll-target="#asv-table">1. ASV Table</a></li>
+  </ul></li>
+  </ul>
+</nav>
+</div>
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Denoising Eukaryotic Reads</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Augustus Pendleton </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">April 16, 2025</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+</header>
+
+<section id="loading-r-packages" class="level1">
+<h1>Loading R packages</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>pacman<span class="sc">::</span><span class="fu">p_load</span>(patchwork, dada2, tidyverse, ShortRead)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Load in the colors and shapes</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"code/R/plotting_aesthetics.R"</span>)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Handy function to get slack message when jobs are done</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"code/R/notify_me.R"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="assessing-quality" class="level1">
+<h1>Assessing Quality</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Find eukaryotic files</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>path <span class="ot">&lt;-</span> <span class="st">"data/mcnichol-bbsplit/02-EUKs"</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>files <span class="ot">&lt;-</span> <span class="fu">list.files</span>(path, <span class="st">".fastq.gz"</span>)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(files)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "Plate01_A01_KH_D001_10480167_AAGJLJNM5.trimmed.SILVA_132_and_PR2_EUK.cdhit95pc_1.fastq.gz"
+[2] "Plate01_A01_KH_D001_10480167_AAGJLJNM5.trimmed.SILVA_132_and_PR2_EUK.cdhit95pc_2.fastq.gz"
+[3] "Plate01_A02_KH_D009_10480167_AAGJLJNM5.trimmed.SILVA_132_and_PR2_EUK.cdhit95pc_1.fastq.gz"
+[4] "Plate01_A02_KH_D009_10480167_AAGJLJNM5.trimmed.SILVA_132_and_PR2_EUK.cdhit95pc_2.fastq.gz"
+[5] "Plate01_A03_KH_D017_10480167_AAGJLJNM5.trimmed.SILVA_132_and_PR2_EUK.cdhit95pc_1.fastq.gz"
+[6] "Plate01_A03_KH_D017_10480167_AAGJLJNM5.trimmed.SILVA_132_and_PR2_EUK.cdhit95pc_2.fastq.gz"</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">length</span>(files)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 152</code></pre>
+</div>
+</div>
+<p>We have 152 files, for which the key piece is the KH_D*** value, which corresponds to the DNA_ID in the Schmidt Lab Data Log. These reads have already had their primers trimmed off and been separated from prokaryotic reads from the same sample.</p>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Forward read variable </span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>forward_reads <span class="ot">&lt;-</span> </span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list.files</span>(path,</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>           <span class="at">pattern =</span> <span class="st">"_1.fastq.gz"</span>,</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>           <span class="at">full.names =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>reverse_reads <span class="ot">&lt;-</span> </span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list.files</span>(path,</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>           <span class="at">pattern =</span> <span class="st">"_2.fastq.gz"</span>,</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>           <span class="at">full.names =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>sample_names <span class="ot">&lt;-</span> </span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">data.frame</span>(</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>            <span class="at">bname =</span> <span class="fu">basename</span>(forward_reads)</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>            ) <span class="sc">%&gt;%</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>           <span class="fu">separate_wider_delim</span>(bname, <span class="at">delim =</span> <span class="st">"_"</span>, <span class="at">names_sep =</span> <span class="st">"_"</span>, <span class="at">too_few =</span> <span class="st">"align_start"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>           <span class="fu">transmute</span>(<span class="at">sample_name =</span> <span class="fu">paste</span>(bname_3, bname_4, <span class="at">sep =</span> <span class="st">"_"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>           <span class="fu">pull</span>()</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>filtered_filepaths_forward <span class="ot">&lt;-</span> </span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">file.path</span>(<span class="st">"data"</span>, <span class="st">"01a_Eukaryotic_Denoising"</span>, <span class="st">"filtered"</span>, <span class="fu">paste0</span>(sample_names, <span class="st">"_R1_filtered.fastq.gz"</span>))</span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>filtered_filepaths_reverse <span class="ot">&lt;-</span> </span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">file.path</span>(<span class="st">"data"</span>, <span class="st">"01a_Eukaryotic_Denoising"</span>, <span class="st">"filtered"</span>, <span class="fu">paste0</span>(sample_names, <span class="st">"_R2_filtered.fastq.gz"</span>))</span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a><span class="co"># Show the quality of each base on the reads</span></span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">314</span>)</span>
+<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>random_plots <span class="ot">&lt;-</span> <span class="fu">sample</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">72</span>, <span class="at">size =</span> <span class="dv">10</span>)</span>
+<span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-31"><a href="#cb6-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-32"><a href="#cb6-32" aria-hidden="true" tabindex="-1"></a><span class="co"># forward_qual_plots &lt;-</span></span>
+<span id="cb6-33"><a href="#cb6-33" aria-hidden="true" tabindex="-1"></a><span class="co">#       plotQualityProfile(forward_reads[random_plots])</span></span>
+<span id="cb6-34"><a href="#cb6-34" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb6-35"><a href="#cb6-35" aria-hidden="true" tabindex="-1"></a><span class="co"># reverse_qual_plots &lt;-</span></span>
+<span id="cb6-36"><a href="#cb6-36" aria-hidden="true" tabindex="-1"></a><span class="co">#       plotQualityProfile(reverse_reads[random_plots])</span></span>
+<span id="cb6-37"><a href="#cb6-37" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb6-38"><a href="#cb6-38" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb6-39"><a href="#cb6-39" aria-hidden="true" tabindex="-1"></a><span class="co"># write_rds(forward_qual_plots,</span></span>
+<span id="cb6-40"><a href="#cb6-40" aria-hidden="true" tabindex="-1"></a><span class="co">#           file = "data/01a_Eukaryotic_Denoising/forward_qual_plots.rds",</span></span>
+<span id="cb6-41"><a href="#cb6-41" aria-hidden="true" tabindex="-1"></a><span class="co">#           compress = "gz")</span></span>
+<span id="cb6-42"><a href="#cb6-42" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb6-43"><a href="#cb6-43" aria-hidden="true" tabindex="-1"></a><span class="co"># write_rds(reverse_qual_plots,</span></span>
+<span id="cb6-44"><a href="#cb6-44" aria-hidden="true" tabindex="-1"></a><span class="co">#           file = "data/01a_Eukaryotic_Denoising/reverse_qual_plots.rds",</span></span>
+<span id="cb6-45"><a href="#cb6-45" aria-hidden="true" tabindex="-1"></a><span class="co">#           compress = "gz")</span></span>
+<span id="cb6-46"><a href="#cb6-46" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-47"><a href="#cb6-47" aria-hidden="true" tabindex="-1"></a>forward_qual_plots <span class="ot">&lt;-</span> <span class="fu">read_rds</span>(<span class="st">"data/01a_Eukaryotic_Denoising/forward_qual_plots.rds"</span>)</span>
+<span id="cb6-48"><a href="#cb6-48" aria-hidden="true" tabindex="-1"></a>reverse_qual_plots <span class="ot">&lt;-</span> <span class="fu">read_rds</span>(<span class="st">"data/01a_Eukaryotic_Denoising/reverse_qual_plots.rds"</span>)</span>
+<span id="cb6-49"><a href="#cb6-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-50"><a href="#cb6-50" aria-hidden="true" tabindex="-1"></a>forward_qual_plots</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../figures/01a_Denoising_Eukaryotic_Reads/read-quality-1.png" class="img-fluid figure-img" width="2400"></p>
+</figure>
+</div>
+</div>
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>reverse_qual_plots</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../figures/01a_Denoising_Eukaryotic_Reads/read-quality-2.png" class="img-fluid figure-img" width="2400"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Okay from this, I’m going to recommend no trimming on the forward read (keeping it at 281), but definitely trimming on the reverse. I’m going to go down to 200bp.</p>
+</section>
+<section id="filter-and-trim" class="level1">
+<h1>Filter and Trim</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">314</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a> </span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="co"># filtered_outs &lt;-</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co">#    filterAndTrim(forward_reads,</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="co">#                filtered_filepaths_forward,</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="co">#                reverse_reads,</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="co">#                filtered_filepaths_reverse,</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="co">#                              truncLen = c(281,200),</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="co">#                              trimLeft = c(0,0), # Primers have already been trimmed!</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="co">#                              maxN = 0,</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="co">#                              maxEE = c(1,1),</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a><span class="co">#                              truncQ = 0,</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="co">#                              minLen = c(281,200),</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a><span class="co">#                              rm.phix = TRUE,</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a><span class="co">#                              compress = TRUE,</span></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a><span class="co">#                              multithread = 20</span></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a><span class="co">#                              )</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a><span class="co">#  </span></span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a><span class="co">#  </span></span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a><span class="co"># write_rds(filtered_outs,</span></span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a><span class="co">#            file = "data/01a_Eukaryotic_Denoising/filtered_outs.rds",</span></span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a><span class="co">#            compress = "gz")</span></span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>filtered_outs <span class="ot">&lt;-</span> <span class="fu">read_rds</span>(<span class="st">"data/01a_Eukaryotic_Denoising/filtered_outs.rds"</span>)</span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a><span class="co"># filt_forward_qual_plots &lt;-</span></span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a><span class="co">#        plotQualityProfile(filtered_filepaths_forward[random_plots])</span></span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a><span class="co">#  </span></span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a><span class="co"># filt_reverse_qual_plots &lt;-</span></span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a><span class="co">#        plotQualityProfile(filtered_filepaths_reverse[random_plots])</span></span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a><span class="co">#  </span></span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a><span class="co">#  </span></span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a><span class="co"># write_rds(filt_forward_qual_plots,</span></span>
+<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a><span class="co">#            file = "data/01a_Eukaryotic_Denoising/filt_forward_qual_plots.rds",</span></span>
+<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a><span class="co">#            compress = "gz")</span></span>
+<span id="cb8-36"><a href="#cb8-36" aria-hidden="true" tabindex="-1"></a><span class="co">#  </span></span>
+<span id="cb8-37"><a href="#cb8-37" aria-hidden="true" tabindex="-1"></a><span class="co"># write_rds(filt_reverse_qual_plots,</span></span>
+<span id="cb8-38"><a href="#cb8-38" aria-hidden="true" tabindex="-1"></a><span class="co">#            file = "data/01a_Eukaryotic_Denoising/filt_reverse_qual_plots.rds",</span></span>
+<span id="cb8-39"><a href="#cb8-39" aria-hidden="true" tabindex="-1"></a><span class="co">#            compress = "gz")</span></span>
+<span id="cb8-40"><a href="#cb8-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-41"><a href="#cb8-41" aria-hidden="true" tabindex="-1"></a>filt_forward_qual_plots <span class="ot">&lt;-</span> <span class="fu">read_rds</span>(<span class="st">"data/01a_Eukaryotic_Denoising/filt_forward_qual_plots.rds"</span>)</span>
+<span id="cb8-42"><a href="#cb8-42" aria-hidden="true" tabindex="-1"></a>filt_reverse_qual_plots <span class="ot">&lt;-</span> <span class="fu">read_rds</span>(<span class="st">"data/01a_Eukaryotic_Denoising/filt_reverse_qual_plots.rds"</span>)</span>
+<span id="cb8-43"><a href="#cb8-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-44"><a href="#cb8-44" aria-hidden="true" tabindex="-1"></a>filt_forward_qual_plots</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../figures/01a_Denoising_Eukaryotic_Reads/filter-trim-1.png" class="img-fluid figure-img" width="2100"></p>
+</figure>
+</div>
+</div>
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>filt_reverse_qual_plots</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../figures/01a_Denoising_Eukaryotic_Reads/filter-trim-2.png" class="img-fluid figure-img" width="2100"></p>
+</figure>
+</div>
+</div>
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>filtered_outs <span class="sc">%&gt;%</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(<span class="at">Median_Reads_In =</span> <span class="fu">median</span>(reads.in),</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>            <span class="at">Median_Reads_Out =</span> <span class="fu">median</span>(reads.out),</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">Median_Reads_Removed =</span> Median_Reads_In <span class="sc">-</span> Median_Reads_Out,</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>            <span class="at">Percent_Removed =</span> Median_Reads_Removed <span class="sc">/</span> Median_Reads_In)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Median_Reads_In Median_Reads_Out Median_Reads_Removed Percent_Removed
+1            7389           3794.5               3594.5       0.4864664</code></pre>
+</div>
+</div>
+<p>Woof - dropping almost 50% of the reads. But those reverses were looking pretty wild. Since we won’t have overlap, it seems really important to me to be discerning on each read though. Something to discuss with Marian for sure.</p>
+<p>Did we lose any samples?</p>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>filtered_outs <span class="sc">%&gt;%</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(reads.out <span class="sc">==</span> <span class="dv">0</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rownames</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">str_remove</span>(<span class="st">"R1.fastq.gz"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>character(0)</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>filtered_outs <span class="sc">%&gt;%</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(reads.out) <span class="sc">%&gt;%</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">sum</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 313743</code></pre>
+</div>
+</div>
+</section>
+<section id="fuse-our-reads" class="level1">
+<h1>Fuse our reads</h1>
+<div class="cell" data-layout-align="center" data-engine.opts="l">
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="ex">conda</span> activate bbmap-env</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> data/01a_Eukaryotic_Denoising/fused</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> item <span class="kw">in</span> <span class="kw">`</span><span class="fu">ls</span> data/01a_Eukaryotic_Denoising/filtered/<span class="pp">*</span>R1_filtered.fastq.gz<span class="kw">`</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">do</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    <span class="va">inpath</span><span class="op">=</span><span class="st">"data/01a_Eukaryotic_Denoising/filtered"</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">outpath</span><span class="op">=</span><span class="st">"data/01a_Eukaryotic_Denoising/fused"</span></span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>    <span class="va">filestem</span><span class="op">=</span><span class="kw">`</span><span class="fu">basename</span> <span class="va">$item</span> R1_filtered.fastq.gz<span class="kw">`</span></span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>    <span class="va">R1</span><span class="op">=</span><span class="va">$inpath</span>/<span class="va">${filestem}</span>R1_filtered.fastq.gz</span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>    <span class="va">R2</span><span class="op">=</span><span class="va">$inpath</span>/<span class="va">${filestem}</span>R2_filtered.fastq.gz</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>    <span class="ex">fuse.sh</span> in=<span class="va">$R1</span> in2=<span class="va">$R2</span> fusepairs=t pad=0 out=<span class="va">$outpath</span>/<span class="va">${filestem}</span>concatenated.fastq</span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a><span class="cf">done</span></span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a><span class="ex">conda</span> deactivate</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Now let’s check to make sure our concatenated reads are all the same length.</p>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>fastqs <span class="ot">&lt;-</span> ShortRead<span class="sc">::</span><span class="fu">readFastq</span>(<span class="st">"data/01a_Eukaryotic_Denoising/fused/"</span>)</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>fastqs<span class="sc">@</span>sread<span class="sc">@</span>ranges<span class="sc">@</span>width <span class="sc">%&gt;%</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">table</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>.
+   481 
+313743 </code></pre>
+</div>
+</div>
+<p>Yay! Every single read across all of our samples are 481 bps.</p>
+<p>To clean up, let’s gzip those fastqs</p>
+<div class="cell" data-layout-align="center" data-engine.opts="l">
+<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="fu">gzip</span> <span class="at">-r</span> data/01a_Eukaryotic_Denoising/fused</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="look-at-fused-quality" class="level1">
+<h1>Look at fused quality</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>fused_files <span class="ot">&lt;-</span> <span class="fu">list.files</span>(<span class="st">"data/01a_Eukaryotic_Denoising/fused"</span>, <span class="at">pattern =</span> <span class="st">".fastq.gz"</span>, <span class="at">full.names =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>new_sample_order <span class="ot">&lt;-</span> fused_files <span class="sc">%&gt;%</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  basename <span class="sc">%&gt;%</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">str_remove</span>(<span class="st">"_concatenated.fastq.gz"</span>)</span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plotQualityProfile</span>(fused_files[random_plots])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../figures/01a_Denoising_Eukaryotic_Reads/fused-quality-1.png" class="img-fluid figure-img" width="2100"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>NOTE - sample order changes here! We will need to be careful.</p>
+</section>
+<section id="generate-an-error-model" class="level1">
+<h1>Generate an error model</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Learn errors</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"code/R/loess_error.R"</span>)</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="co"># This function is from here: worth reading in its entirety</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a><span class="co"># https://github.com/benjjneb/dada2/issues/1307</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="co"># There has been active discussion the past few months that binned quality scores need to use many more bases than continuous quality scores to prevent spurious ASVs. </span></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a><span class="co"># https://github.com/benjjneb/dada2/issues/1307</span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a><span class="co"># We only have a total of 3e5 reads here, so our nbases is effectively using every single one.</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a><span class="co"># error_model_fused &lt;-</span></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a><span class="co">#         learnErrors(fused_files,</span></span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a><span class="co">#                     multithread = 30,</span></span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a><span class="co">#                     verbose = FALSE,</span></span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a><span class="co">#                     errorEstimationFunction = loessErrfun_mod4,</span></span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a><span class="co">#                     nbases = 1e9</span></span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a><span class="co">#                     )</span></span>
+<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a><span class="co"># write_rds(error_model_fused, file = "data/01a_Eukaryotic_Denoising/error_model_fused.rds")</span></span>
+<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a>error_models_fused <span class="ot">&lt;-</span> <span class="fu">read_rds</span>(<span class="st">"data/01a_Eukaryotic_Denoising/error_model_fused.rds"</span>)</span>
+<span id="cb21-24"><a href="#cb21-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-25"><a href="#cb21-25" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot the errors</span></span>
+<span id="cb21-26"><a href="#cb21-26" aria-hidden="true" tabindex="-1"></a><span class="co"># the estimated error rates (black line) are a good fit to the observed rates (points), and the error rates drop with increased quality as expected</span></span>
+<span id="cb21-27"><a href="#cb21-27" aria-hidden="true" tabindex="-1"></a><span class="fu">plotErrors</span>(error_models_fused,</span>
+<span id="cb21-28"><a href="#cb21-28" aria-hidden="true" tabindex="-1"></a>           <span class="at">nominalQ =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../figures/01a_Denoising_Eukaryotic_Reads/learn-errors-1.png" class="img-fluid figure-img" width="2100"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Predicted error is okay compared to real data, tbh, but honestly it seems like it’s the best we can do.</p>
+</section>
+<section id="inferring-asvs-on-the-forward-and-reverse-sequences" class="level1">
+<h1>Inferring ASVs on the forward and reverse sequences</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># dada_fused &lt;-</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   dada(fused_files,</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="co">#        err = error_model_fused,</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="co">#        multithread = 30)</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="co"># notify_me(exists("dada_fused"), message = "Forward done")</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a><span class="co"># write_rds(dada_fused,</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a><span class="co">#           file = "data/01a_Eukaryotic_Denoising/dada_fused.rds",</span></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="co">#           compress = "gz")</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>dada_fused <span class="ot">&lt;-</span> <span class="fu">read_rds</span>(<span class="st">"data/01a_Eukaryotic_Denoising/dada_fused.rds"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="generate-a-count-table" class="level1">
+<h1>Generate a count table!</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>seqtabs <span class="ot">&lt;-</span> <span class="fu">makeSequenceTable</span>(dada_fused)</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Let's look at the sequence distributions for each run to confirm they're similar</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>seqtabs <span class="sc">%&gt;%</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>        getSequences <span class="sc">%&gt;%</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>        nchar <span class="sc">%&gt;%</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>        table <span class="sc">%&gt;%</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>        sort</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code> 481 
+1631 </code></pre>
+</div>
+</div>
+<p>Good confirmation that all of our ASVs are 481bp.</p>
+</section>
+<section id="check-remove-for-chimeras-bimeras" class="level1">
+<h1>Check &amp; Remove for Chimeras (Bimeras)</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Identify and remove chimeras</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="co"># seqtab_nochim &lt;- removeBimeraDenovo(seqtabs,</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="co">#                                     multithread = 30)</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="co"># write_rds(seqtab_nochim, file = "data/01a_Eukaryotic_Denoising/seqtab_nochim.rds")</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>seqtab_nochim <span class="ot">&lt;-</span> <span class="fu">read_rds</span>(<span class="st">"data/01a_Eukaryotic_Denoising/seqtab_nochim.rds"</span>)</span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>asvs <span class="ot">&lt;-</span> <span class="fu">dim</span>(seqtab_nochim)[<span class="dv">2</span>]</span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a><span class="co"># What proportion of counts were removed? </span></span>
+<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>chim_check <span class="ot">&lt;-</span> <span class="fu">sum</span>(seqtab_nochim)<span class="sc">/</span><span class="fu">sum</span>(seqtabs)</span>
+<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>frac_removed <span class="ot">&lt;-</span> (<span class="dv">1</span><span class="sc">-</span>chim_check)<span class="sc">*</span><span class="dv">100</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>We removed 0.0960545% of reads when filtering for chimeras.</p>
+<p>We removed all ASVs that weren’t size 252 or 253.</p>
+</section>
+<section id="track-the-sequences-through-the-pipeline" class="level1">
+<h1>Track the sequences through the pipeline</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># create a little function to identify number seqs </span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>getN <span class="ot">&lt;-</span> <span class="cf">function</span>(x) <span class="fu">sum</span>(<span class="fu">getUniques</span>(x))</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>dada_fused <span class="ot">&lt;-</span> </span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">map_dbl</span>(dada_fused, getN) </span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>sum_filter_df <span class="ot">&lt;-</span> </span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>  filtered_outs <span class="sc">%&gt;%</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rownames_to_column</span>(<span class="at">var =</span> <span class="st">"sample_name"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">separate_wider_delim</span>(sample_name, <span class="at">delim =</span> <span class="st">"_"</span>, <span class="at">names =</span> <span class="fu">c</span>(<span class="st">"A"</span>,<span class="st">"B"</span>, <span class="st">"C"</span>, <span class="st">"D"</span>), <span class="at">too_many =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">sample_name =</span> <span class="fu">paste</span>(C,D, <span class="at">sep =</span> <span class="st">"_"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(sample_name) <span class="sc">%&gt;%</span></span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(<span class="at">input =</span> <span class="fu">sum</span>(reads.in),</span>
+<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a>            <span class="at">filtered =</span> <span class="fu">sum</span>(reads.out)) <span class="sc">%&gt;%</span></span>
+<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(filtered <span class="sc">&gt;</span> <span class="dv">0</span>)</span>
+<span id="cb26-18"><a href="#cb26-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-19"><a href="#cb26-19" aria-hidden="true" tabindex="-1"></a><span class="co"># Make the table to track the seqs </span></span>
+<span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">names</span>(dada_fused) <span class="sc">==</span> <span class="fu">paste0</span>(new_sample_order, <span class="st">"_concatenated.fastq.gz"</span>))</span>
+<span id="cb26-22"><a href="#cb26-22" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">names</span>(<span class="fu">rowSums</span>(seqtab_nochim)) <span class="sc">==</span> <span class="fu">paste0</span>(new_sample_order, <span class="st">"_concatenated.fastq.gz"</span>))</span>
+<span id="cb26-23"><a href="#cb26-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-24"><a href="#cb26-24" aria-hidden="true" tabindex="-1"></a>track_df <span class="ot">&lt;-</span> </span>
+<span id="cb26-25"><a href="#cb26-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">data.frame</span>(<span class="at">sample_name =</span> new_sample_order) <span class="sc">%&gt;%</span></span>
+<span id="cb26-26"><a href="#cb26-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(sum_filter_df) <span class="sc">%&gt;%</span></span>
+<span id="cb26-27"><a href="#cb26-27" aria-hidden="true" tabindex="-1"></a>   <span class="fu">cbind</span>(dada_fused,</span>
+<span id="cb26-28"><a href="#cb26-28" aria-hidden="true" tabindex="-1"></a>        <span class="fu">rowSums</span>(seqtab_nochim))</span>
+<span id="cb26-29"><a href="#cb26-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-30"><a href="#cb26-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-31"><a href="#cb26-31" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(track_df)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>                              sample_name input filtered dada_fused
+KH_D001_concatenated.fastq.gz     KH_D001  1358      755        554
+KH_D002_concatenated.fastq.gz     KH_D002   443      238        197
+KH_D003_concatenated.fastq.gz     KH_D003  1814      897        769
+KH_D004_concatenated.fastq.gz     KH_D004   151       67         40
+KH_D005_concatenated.fastq.gz     KH_D005  7506     3484       3238
+KH_D006_concatenated.fastq.gz     KH_D006  7003     3788       3491
+                              rowSums(seqtab_nochim)
+KH_D001_concatenated.fastq.gz                    554
+KH_D002_concatenated.fastq.gz                    197
+KH_D003_concatenated.fastq.gz                    769
+KH_D004_concatenated.fastq.gz                     40
+KH_D005_concatenated.fastq.gz                   3238
+KH_D006_concatenated.fastq.gz                   3491</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Change column names </span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="fu">colnames</span>(track_df) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"DNA_ID"</span> , <span class="st">"input"</span>, <span class="st">"filtered"</span>, <span class="st">"denoised"</span>, <span class="st">"nochim"</span>)</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="fu">rownames</span>(track_df) <span class="ot">&lt;-</span> track_df<span class="sc">$</span>DNA_ID</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Generate a plot to track the reads through our DADA2 pipeline</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>track_df <span class="sc">%&gt;%</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(input<span class="sc">:</span>nochim, <span class="at">names_to =</span> <span class="st">"read_type"</span>, <span class="at">values_to =</span> <span class="st">"num_reads"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>  <span class="co">#left_join(metadata, by = "sample_name") %&gt;% </span></span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">read_type =</span> <span class="fu">fct_relevel</span>(read_type, </span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>                                 <span class="st">"input"</span>, <span class="st">"filtered"</span>, <span class="st">"denoised"</span>, <span class="st">"nochim"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> read_type, <span class="at">y =</span> num_reads, <span class="at">fill =</span> read_type)) <span class="sc">+</span> </span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a>  <span class="co">#facet_grid(~strata) + </span></span>
+<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="fu">aes</span>(<span class="at">group =</span> DNA_ID)) <span class="sc">+</span> </span>
+<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">shape =</span> <span class="dv">21</span>, <span class="at">size =</span> <span class="dv">3</span>, <span class="at">alpha =</span> <span class="fl">0.8</span>, <span class="at">color =</span> <span class="st">"grey"</span>) <span class="sc">+</span> </span>
+<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_brewer</span>(<span class="at">palette =</span> <span class="st">"Spectral"</span>) <span class="sc">+</span> </span>
+<span id="cb28-16"><a href="#cb28-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>() <span class="sc">+</span> </span>
+<span id="cb28-17"><a href="#cb28-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Filtering Step"</span>, <span class="at">y =</span> <span class="st">"Number of Sequences"</span>) <span class="sc">+</span></span>
+<span id="cb28-18"><a href="#cb28-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"bottom"</span>,</span>
+<span id="cb28-19"><a href="#cb28-19" aria-hidden="true" tabindex="-1"></a>        <span class="at">axis.text.x =</span> <span class="fu">element_text</span>(<span class="at">angle =</span> <span class="dv">45</span>, <span class="at">vjust =</span> <span class="dv">1</span>, <span class="at">hjust =</span> <span class="dv">1</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../figures/01a_Denoising_Eukaryotic_Reads/track-seqs-loess-1.png" class="img-fluid figure-img" width="2100"></p>
+</figure>
+</div>
+</div>
+<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># make track dataframe and edit names to match metadata</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>track_df_euk <span class="ot">&lt;-</span> track_df <span class="sc">%&gt;%</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">perc_reads_retained =</span> <span class="dv">100</span> <span class="sc">*</span> nochim <span class="sc">/</span> input)</span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(track_df_euk<span class="sc">$</span>perc_reads_retained, <span class="at">breaks =</span> <span class="dv">50</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../figures/01a_Denoising_Eukaryotic_Reads/track-seqs-loess-2.png" class="img-fluid figure-img" width="2100"></p>
+</figure>
+</div>
+</div>
+<div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(track_df_euk<span class="sc">$</span>nochim, <span class="at">breaks =</span> <span class="dv">50</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../figures/01a_Denoising_Eukaryotic_Reads/track-seqs-loess-3.png" class="img-fluid figure-img" width="2100"></p>
+</figure>
+</div>
+</div>
+<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>med_read_retained <span class="ot">&lt;-</span> <span class="fu">median</span>(track_df_euk<span class="sc">$</span>nochim)</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>med_perc_retained <span class="ot">&lt;-</span> <span class="fu">median</span>(track_df_euk<span class="sc">$</span>perc_reads_retained)</span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>num_asvs <span class="ot">&lt;-</span> <span class="fu">ncol</span>(seqtab_nochim)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Overall using the updated error model, we retained 3501.5 reads and 47.5129876 % of reads. We inferred 1622 ASVs.</p>
+</section>
+<section id="prepare-the-data-for-export" class="level1">
+<h1>Prepare the data for export!</h1>
+<section id="asv-table" class="level2">
+<h2 class="anchored" data-anchor-id="asv-table">1. ASV Table</h2>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="do">############## Modify the ASV names and then save a fasta file! </span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Give headers more manageable names</span></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="co"># First pull the ASV sequences</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>asv_seqs <span class="ot">&lt;-</span> <span class="fu">colnames</span>(seqtab_nochim)</span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a><span class="co"># make headers for our ASV seq fasta file, which will be our asv names</span></span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>asv_headers <span class="ot">&lt;-</span> <span class="fu">vector</span>(<span class="fu">dim</span>(seqtab_nochim)[<span class="dv">2</span>], <span class="at">mode =</span> <span class="st">"character"</span>)</span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a><span class="co"># loop through vector and fill it in with ASV names </span></span>
+<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (i <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span><span class="fu">dim</span>(seqtab_nochim)[<span class="dv">2</span>]) {</span>
+<span id="cb32-12"><a href="#cb32-12" aria-hidden="true" tabindex="-1"></a>  asv_headers[i] <span class="ot">&lt;-</span> <span class="fu">paste</span>(<span class="st">"&gt;EUK"</span>, i, <span class="at">sep =</span> <span class="st">"_"</span>)</span>
+<span id="cb32-13"><a href="#cb32-13" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb32-14"><a href="#cb32-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-15"><a href="#cb32-15" aria-hidden="true" tabindex="-1"></a><span class="co"># intitution check</span></span>
+<span id="cb32-16"><a href="#cb32-16" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(asv_headers, <span class="dv">20</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code> [1] "&gt;EUK_1"  "&gt;EUK_2"  "&gt;EUK_3"  "&gt;EUK_4"  "&gt;EUK_5"  "&gt;EUK_6"  "&gt;EUK_7" 
+ [8] "&gt;EUK_8"  "&gt;EUK_9"  "&gt;EUK_10" "&gt;EUK_11" "&gt;EUK_12" "&gt;EUK_13" "&gt;EUK_14"
+[15] "&gt;EUK_15" "&gt;EUK_16" "&gt;EUK_17" "&gt;EUK_18" "&gt;EUK_19" "&gt;EUK_20"</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="do">##### Rename ASVs in table then write out our ASV fasta file! </span></span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="co"># And save our seqtab R Object for taxonomic assignment</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>seqtab_euk <span class="ot">&lt;-</span> seqtab_nochim </span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a><span class="fu">row.names</span>(seqtab_euk) <span class="ot">&lt;-</span> new_sample_order</span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>asv_tab <span class="ot">&lt;-</span> <span class="fu">t</span>(seqtab_nochim)</span>
+<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a><span class="do">## Rename our asvs! </span></span>
+<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a><span class="fu">row.names</span>(asv_tab) <span class="ot">&lt;-</span> <span class="fu">sub</span>(<span class="st">"&gt;"</span>, <span class="st">""</span>, asv_headers)</span>
+<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a><span class="co">#View(asv_tab)</span></span>
+<span id="cb34-12"><a href="#cb34-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-13"><a href="#cb34-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Write the count table to a file! </span></span>
+<span id="cb34-14"><a href="#cb34-14" aria-hidden="true" tabindex="-1"></a><span class="fu">write.table</span>(asv_tab, <span class="st">"data/01a_Eukaryotic_Denoising/EUK_counts.tsv"</span>, <span class="at">sep =</span> <span class="st">"</span><span class="sc">\t</span><span class="st">"</span>, <span class="at">quote =</span> <span class="cn">FALSE</span>, <span class="at">col.names =</span> <span class="cn">NA</span>)</span>
+<span id="cb34-15"><a href="#cb34-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-16"><a href="#cb34-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Write out the fasta file for reference later on for what seq matches what ASV</span></span>
+<span id="cb34-17"><a href="#cb34-17" aria-hidden="true" tabindex="-1"></a>asv_fasta <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fu">rbind</span>(asv_headers, asv_seqs))</span>
+<span id="cb34-18"><a href="#cb34-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-19"><a href="#cb34-19" aria-hidden="true" tabindex="-1"></a><span class="co"># Save to a file!</span></span>
+<span id="cb34-20"><a href="#cb34-20" aria-hidden="true" tabindex="-1"></a><span class="fu">write</span>(asv_fasta, <span class="st">"data/01a_Eukaryotic_Denoising/EUK.fasta"</span>)</span>
+<span id="cb34-21"><a href="#cb34-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-22"><a href="#cb34-22" aria-hidden="true" tabindex="-1"></a><span class="fu">save</span>(seqtab_euk, <span class="at">file =</span> <span class="st">"data/01a_Eukaryotic_Denoising/seqtab_euk.RData"</span>)</span>
+<span id="cb34-23"><a href="#cb34-23" aria-hidden="true" tabindex="-1"></a><span class="co"># And save our meta_track R object</span></span>
+<span id="cb34-24"><a href="#cb34-24" aria-hidden="true" tabindex="-1"></a><span class="fu">save</span>(track_df_euk, <span class="at">file =</span> <span class="st">"data/01a_Eukaryotic_Denoising/track_df_euk.RData"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">session_info</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>─ Session info ───────────────────────────────────────────────────────────────
+ setting  value
+ version  R version 4.3.3 (2024-02-29)
+ os       Rocky Linux 9.4 (Blue Onyx)
+ system   x86_64, linux-gnu
+ ui       X11
+ language (EN)
+ collate  en_US.UTF-8
+ ctype    en_US.UTF-8
+ tz       America/New_York
+ date     2025-04-16
+ pandoc   3.1.1 @ /usr/lib/rstudio-server/bin/quarto/bin/tools/ (via rmarkdown)
+ quarto   1.3.450 @ /usr/lib/rstudio-server/bin/quarto/bin/quarto
+
+─ Packages ───────────────────────────────────────────────────────────────────
+ ! package              * version   date (UTC) lib source
+   abind                  1.4-8     2024-09-12 [1] RSPM (R 4.3.3)
+   Biobase              * 2.62.0    2023-10-24 [1] Bioconductor
+   BiocGenerics         * 0.48.1    2023-11-01 [1] Bioconductor
+   BiocParallel         * 1.36.0    2023-10-24 [1] Bioconductor
+   Biostrings           * 2.70.3    2024-03-13 [1] Bioconductor 3.18 (R 4.3.3)
+   bitops                 1.0-9     2024-10-03 [1] RSPM (R 4.3.3)
+   cachem                 1.1.0     2024-05-16 [1] RSPM (R 4.3.3)
+   cli                    3.6.4     2025-02-13 [1] RSPM (R 4.3.3)
+ P codetools              0.2-19    2023-02-01 [?] CRAN (R 4.3.3)
+   colorspace             2.1-1     2024-07-26 [1] RSPM (R 4.3.3)
+   crayon                 1.5.3     2024-06-20 [1] RSPM (R 4.3.3)
+   dada2                * 1.30.0    2023-10-24 [1] Bioconductor
+   DelayedArray           0.28.0    2023-10-24 [1] Bioconductor
+   deldir                 2.0-4     2024-02-28 [1] RSPM (R 4.3.3)
+ P devtools               2.4.5     2022-10-11 [?] CRAN (R 4.3.2)
+   digest                 0.6.37    2024-08-19 [1] RSPM (R 4.3.3)
+   dplyr                * 1.1.4     2023-11-17 [1] RSPM (R 4.3.3)
+ P ellipsis               0.3.2     2021-04-29 [?] CRAN (R 4.3.2)
+   evaluate               1.0.3     2025-01-10 [1] RSPM (R 4.3.3)
+   farver                 2.1.2     2024-05-13 [1] RSPM (R 4.3.3)
+   fastmap                1.2.0     2024-05-15 [1] RSPM (R 4.3.3)
+   forcats              * 1.0.0     2023-01-29 [1] RSPM (R 4.3.3)
+   fs                     1.6.5     2024-10-30 [1] RSPM (R 4.3.3)
+   generics               0.1.3     2022-07-05 [1] RSPM (R 4.3.3)
+   GenomeInfoDb         * 1.38.8    2024-03-15 [1] Bioconductor 3.18 (R 4.3.3)
+   GenomeInfoDbData       1.2.11    2025-04-11 [1] Bioconductor
+   GenomicAlignments    * 1.38.2    2024-01-16 [1] Bioconductor 3.18 (R 4.3.3)
+   GenomicRanges        * 1.54.1    2023-10-29 [1] Bioconductor
+   ggplot2              * 3.5.2     2025-04-09 [1] RSPM (R 4.3.3)
+   glue                   1.8.0     2024-09-30 [1] RSPM (R 4.3.3)
+   gtable                 0.3.6     2024-10-25 [1] RSPM (R 4.3.3)
+   hms                    1.1.3     2023-03-21 [1] RSPM (R 4.3.3)
+   htmltools              0.5.8.1   2024-04-04 [1] RSPM (R 4.3.3)
+ P htmlwidgets            1.6.4     2023-12-06 [?] CRAN (R 4.3.2)
+ P httpuv                 1.6.15    2024-03-26 [?] CRAN (R 4.3.2)
+   hwriter                1.3.2.1   2022-04-08 [1] RSPM (R 4.3.3)
+   interp                 1.1-6     2024-01-26 [1] RSPM (R 4.3.3)
+   IRanges              * 2.36.0    2023-10-24 [1] Bioconductor
+   jpeg                   0.1-11    2025-03-21 [1] RSPM (R 4.3.3)
+   jsonlite               2.0.0     2025-03-27 [1] RSPM (R 4.3.3)
+   knitr                  1.50      2025-03-16 [1] RSPM (R 4.3.3)
+   labeling               0.4.3     2023-08-29 [1] RSPM (R 4.3.3)
+ P later                  1.4.2     2025-04-08 [?] RSPM (R 4.3.3)
+ P lattice                0.22-5    2023-10-24 [?] CRAN (R 4.3.3)
+   latticeExtra           0.6-30    2022-07-04 [1] RSPM (R 4.3.3)
+   lifecycle              1.0.4     2023-11-07 [1] RSPM (R 4.3.3)
+   lubridate            * 1.9.4     2024-12-08 [1] RSPM (R 4.3.3)
+   magrittr               2.0.3     2022-03-30 [1] RSPM (R 4.3.3)
+ P Matrix                 1.6-5     2024-01-11 [?] CRAN (R 4.3.3)
+   MatrixGenerics       * 1.14.0    2023-10-24 [1] Bioconductor
+   matrixStats          * 1.5.0     2025-01-07 [1] RSPM (R 4.3.3)
+   memoise                2.0.1     2021-11-26 [1] RSPM (R 4.3.3)
+   mime                   0.13      2025-03-17 [1] RSPM (R 4.3.3)
+ P miniUI                 0.1.1.1   2018-05-18 [?] CRAN (R 4.3.2)
+   munsell                0.5.1     2024-04-01 [1] RSPM (R 4.3.3)
+ P pacman                 0.5.1     2019-03-11 [?] CRAN (R 4.3.2)
+   patchwork            * 1.3.0     2024-09-16 [1] RSPM (R 4.3.3)
+   pillar                 1.10.2    2025-04-05 [1] RSPM (R 4.3.3)
+ P pkgbuild               1.4.7     2025-03-24 [?] RSPM (R 4.3.3)
+   pkgconfig              2.0.3     2019-09-22 [1] RSPM (R 4.3.3)
+ P pkgload                1.4.0     2024-06-28 [?] CRAN (R 4.3.2)
+   plyr                   1.8.9     2023-10-02 [1] RSPM (R 4.3.3)
+   png                    0.1-8     2022-11-29 [1] RSPM (R 4.3.3)
+ P profvis                0.4.0     2024-09-20 [?] CRAN (R 4.3.2)
+ P promises               1.3.2     2024-11-28 [?] CRAN (R 4.3.2)
+   purrr                * 1.0.4     2025-02-05 [1] RSPM (R 4.3.3)
+   R6                     2.6.1     2025-02-15 [1] RSPM (R 4.3.3)
+   RColorBrewer           1.1-3     2022-04-03 [1] RSPM (R 4.3.3)
+   Rcpp                 * 1.0.14    2025-01-12 [1] RSPM (R 4.3.3)
+   RcppParallel           5.1.10    2025-01-24 [1] RSPM (R 4.3.3)
+   RCurl                  1.98-1.17 2025-03-22 [1] RSPM (R 4.3.3)
+   readr                * 2.1.5     2024-01-10 [1] RSPM (R 4.3.3)
+ P remotes                2.5.0     2024-03-17 [?] CRAN (R 4.3.2)
+   renv                   1.0.3     2023-09-19 [1] CRAN (R 4.3.3)
+   reshape2               1.4.4     2020-04-09 [1] RSPM (R 4.3.3)
+   rlang                  1.1.5     2025-01-17 [1] RSPM (R 4.3.3)
+   rmarkdown              2.29      2024-11-04 [1] RSPM (R 4.3.3)
+   Rsamtools            * 2.18.0    2023-10-24 [1] Bioconductor
+   rstudioapi             0.17.1    2024-10-22 [1] RSPM (R 4.3.3)
+   S4Arrays               1.2.1     2024-03-04 [1] Bioconductor 3.18 (R 4.3.3)
+   S4Vectors            * 0.40.2    2023-11-23 [1] Bioconductor 3.18 (R 4.3.3)
+   scales                 1.3.0     2023-11-28 [1] RSPM (R 4.3.3)
+ P sessioninfo            1.2.3     2025-02-05 [?] RSPM (R 4.3.3)
+ P shiny                  1.10.0    2024-12-14 [?] CRAN (R 4.3.2)
+   ShortRead            * 1.60.0    2023-10-24 [1] Bioconductor
+   SparseArray            1.2.4     2024-02-11 [1] Bioconductor 3.18 (R 4.3.3)
+   stringi                1.8.7     2025-03-27 [1] RSPM (R 4.3.3)
+   stringr              * 1.5.1     2023-11-14 [1] RSPM (R 4.3.3)
+   SummarizedExperiment * 1.32.0    2023-10-24 [1] Bioconductor
+   tibble               * 3.2.1     2023-03-20 [1] RSPM (R 4.3.3)
+   tidyr                * 1.3.1     2024-01-24 [1] RSPM (R 4.3.3)
+   tidyselect             1.2.1     2024-03-11 [1] RSPM (R 4.3.3)
+   tidyverse            * 2.0.0     2023-02-22 [1] RSPM (R 4.3.3)
+   timechange             0.3.0     2024-01-18 [1] RSPM (R 4.3.3)
+   tzdb                   0.5.0     2025-03-15 [1] RSPM (R 4.3.3)
+ P urlchecker             1.0.1     2021-11-30 [?] CRAN (R 4.3.2)
+ P usethis                3.1.0     2024-11-26 [?] CRAN (R 4.3.2)
+   vctrs                  0.6.5     2023-12-01 [1] RSPM (R 4.3.3)
+   withr                  3.0.2     2024-10-28 [1] RSPM (R 4.3.3)
+   xfun                   0.52      2025-04-02 [1] RSPM (R 4.3.3)
+ P xtable                 1.8-4     2019-04-21 [?] CRAN (R 4.3.2)
+   XVector              * 0.42.0    2023-10-24 [1] Bioconductor
+   yaml                   2.3.10    2024-07-26 [1] RSPM (R 4.3.3)
+   zlibbioc               1.48.2    2024-03-13 [1] Bioconductor 3.18 (R 4.3.3)
+
+ [1] /local/workdir/arp277/AAM_ERI_2024/renv/library/R-4.3/x86_64-pc-linux-gnu
+ [2] /home/arp277/.cache/R/renv/sandbox/R-4.3/x86_64-pc-linux-gnu/fd835031
+
+ * ── Packages attached to the search path.
+ P ── Loaded and on-disk path mismatch.
+
+──────────────────────────────────────────────────────────────────────────────</code></pre>
+</div>
+</div>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>

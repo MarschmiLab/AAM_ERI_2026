@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.450">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Augustus Pendleton">
+<meta name="dcterms.date" content="2025-05-21">
+
+<title>Build a Phylogenetic Tree of Prokaryotic Sequences</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="04b_Prokaryotic_TreeBuilding_files/libs/clipboard/clipboard.min.js"></script>
+<script src="04b_Prokaryotic_TreeBuilding_files/libs/quarto-html/quarto.js"></script>
+<script src="04b_Prokaryotic_TreeBuilding_files/libs/quarto-html/popper.min.js"></script>
+<script src="04b_Prokaryotic_TreeBuilding_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="04b_Prokaryotic_TreeBuilding_files/libs/quarto-html/anchor.min.js"></script>
+<link href="04b_Prokaryotic_TreeBuilding_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="04b_Prokaryotic_TreeBuilding_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="04b_Prokaryotic_TreeBuilding_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="04b_Prokaryotic_TreeBuilding_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="04b_Prokaryotic_TreeBuilding_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article toc-left">
+<div id="quarto-sidebar-toc-left" class="sidebar toc-left">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul class="collapse">
+  <li><a href="#purpose-of-this-document" id="toc-purpose-of-this-document" class="nav-link active" data-scroll-target="#purpose-of-this-document">Purpose of this document</a></li>
+  <li><a href="#load-packages-and-functions" id="toc-load-packages-and-functions" class="nav-link" data-scroll-target="#load-packages-and-functions">Load Packages and Functions</a></li>
+  <li><a href="#load-data" id="toc-load-data" class="nav-link" data-scroll-target="#load-data">Load data</a></li>
+  <li><a href="#write-asv-fasta-file" id="toc-write-asv-fasta-file" class="nav-link" data-scroll-target="#write-asv-fasta-file">Write ASV Fasta file</a></li>
+  <li><a href="#mafft-for-alignment" id="toc-mafft-for-alignment" class="nav-link" data-scroll-target="#mafft-for-alignment">MAFFT for Alignment</a></li>
+  <li><a href="#fasttree" id="toc-fasttree" class="nav-link" data-scroll-target="#fasttree">FastTree</a></li>
+  <li><a href="#plot-with-ggtree" id="toc-plot-with-ggtree" class="nav-link" data-scroll-target="#plot-with-ggtree">Plot with ggtree</a></li>
+  <li><a href="#looking-at-our-tree---cant-root-at-archaea" id="toc-looking-at-our-tree---cant-root-at-archaea" class="nav-link" data-scroll-target="#looking-at-our-tree---cant-root-at-archaea">Looking at our tree - can’t root at archaea</a></li>
+  <li><a href="#saving-prokaryotic-tree" id="toc-saving-prokaryotic-tree" class="nav-link" data-scroll-target="#saving-prokaryotic-tree">Saving prokaryotic tree</a></li>
+  <li><a href="#examining-plastids-really-dont-know-if-this-is-reasonable" id="toc-examining-plastids-really-dont-know-if-this-is-reasonable" class="nav-link" data-scroll-target="#examining-plastids-really-dont-know-if-this-is-reasonable">Examining plastids (really don’t know if this is reasonable)</a></li>
+  <li><a href="#load-data-1" id="toc-load-data-1" class="nav-link" data-scroll-target="#load-data-1">Load data</a></li>
+  <li><a href="#write-asv-fasta-file-1" id="toc-write-asv-fasta-file-1" class="nav-link" data-scroll-target="#write-asv-fasta-file-1">Write ASV Fasta file</a></li>
+  <li><a href="#mafft-for-alignment-1" id="toc-mafft-for-alignment-1" class="nav-link" data-scroll-target="#mafft-for-alignment-1">MAFFT for Alignment</a></li>
+  <li><a href="#fasttree-1" id="toc-fasttree-1" class="nav-link" data-scroll-target="#fasttree-1">FastTree</a></li>
+  <li><a href="#plot-with-ggtree-1" id="toc-plot-with-ggtree-1" class="nav-link" data-scroll-target="#plot-with-ggtree-1">Plot with ggtree</a></li>
+  <li><a href="#looking-at-our-tree" id="toc-looking-at-our-tree" class="nav-link" data-scroll-target="#looking-at-our-tree">Looking at our tree</a></li>
+  <li><a href="#saving-plastid-tree" id="toc-saving-plastid-tree" class="nav-link" data-scroll-target="#saving-plastid-tree">Saving plastid tree</a></li>
+  <li><a href="#session-information" id="toc-session-information" class="nav-link" data-scroll-target="#session-information">Session Information</a></li>
+  </ul>
+</nav>
+</div>
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Build a Phylogenetic Tree of Prokaryotic Sequences</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Augustus Pendleton </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">May 21, 2025</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+</header>
+
+<section id="purpose-of-this-document" class="level1">
+<h1>Purpose of this document</h1>
+<p>Here, I build a phylogenetic tree, for later use in phylogenetically weighted richness and distance measures.</p>
+<p>The goal of this document is to create a phylogenetic tree from the processed data and add it to the phyloseq object.</p>
+</section>
+<section id="load-packages-and-functions" class="level1">
+<h1>Load Packages and Functions</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load Packages</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>pacman<span class="sc">::</span><span class="fu">p_load</span>(phyloseq, ggtree, patchwork, tidytree, phytools, tidyverse, <span class="at">install =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># load colors and shapes</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"code/R/plotting_aesthetics.R"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="load-data" class="level1">
+<h1>Load data</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load in the raw_phyloseq data from DADA2_workflow.Rmd</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">load</span>(<span class="st">"data/03b_Prokaryotic_Errors_and_Contamination/preprocessed_prok_physeq.RData"</span>)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>preprocessed_prok_physeq</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>phyloseq-class experiment-level object
+otu_table()   OTU Table:         [ 11040 taxa and 77 samples ]
+sample_data() Sample Data:       [ 77 samples by 8 sample variables ]
+tax_table()   Taxonomy Table:    [ 11040 taxa by 9 taxonomic ranks ]</code></pre>
+</div>
+</div>
+</section>
+<section id="write-asv-fasta-file" class="level1">
+<h1>Write ASV Fasta file</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># first pull taxonomic table from phyloseq object</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co"># contains ASV and sequences</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>tax_table <span class="ot">&lt;-</span> preprocessed_prok_physeq<span class="sc">@</span>tax_table <span class="sc">%&gt;%</span> <span class="fu">as.data.frame</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(ASV, ASVseqs)</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co"># add &gt; symbol to ASV names for file formatting</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>tax_table<span class="sc">$</span>ASV <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">"&gt;"</span>,tax_table<span class="sc">$</span>ASV)</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="co"># bind ASVs and sequences together in one long character</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>seqs_fasta <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fu">rbind</span>(tax_table<span class="sc">$</span>ASV, tax_table<span class="sc">$</span>ASVseqs))</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="co"># write seqs_fasta out as a fasta file</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="fu">write</span>(seqs_fasta, <span class="at">file =</span> <span class="st">"data/04b_Prokaryotic_TreeBuilding/preprocessed_prok_asvs.fasta"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="mafft-for-alignment" class="level1">
+<h1>MAFFT for Alignment</h1>
+<p>This step aligns the ASV fasta from phyloseq_preprocessing and outputs an aligned fasta file. Note that you should be running this from the project’s home directory!</p>
+<div class="cell" data-layout-align="center" data-engine.opts="-l">
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Run MAFFT on file</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="co"># I am using auto options for now (instead of specifying arguments)</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co"># MAFFT automatically recognizes that it is a nucleotide alignment</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Set seed (not sure if relevant but not taking chances)</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="va">RANDOM</span><span class="op">=</span>314</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="ex">/programs/mafft/bin/mafft</span> <span class="at">--auto</span> <span class="at">--quiet</span> data/04b_Prokaryotic_TreeBuilding/preprocessed_prok_asvs.fasta <span class="op">&gt;</span> data/04b_Prokaryotic_TreeBuilding/aligned_prok_asvs.fasta </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="fasttree" class="level1">
+<h1>FastTree</h1>
+<p>This section of code takes the aligned fasta file and runs it through Fast Tree to output an unrooted tree. It also takes awhile. The end of the logfile will tell you relevant information on who the tree was built.</p>
+<div class="cell" data-layout-align="center" data-engine.opts="-l">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">#add to path</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">PATH</span><span class="op">=</span>/programs/FastTree-2.1.11:<span class="va">$PATH</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co"># run command</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="co"># -nt indicates it is a nucleotide alignment </span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="co"># -gtr sets the model to a generalized time-reversible model </span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="co"># -fastest speeds up the process and reduces memory usage (recommended for &gt;50,000 sequences) - check if gtr is neighbor-joining</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="co"># takes aligned_seqs fasta file as input and outputs unrooted.tree</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="co"># saves log file as fasttree.log (includes intermediate trees, settings, and model details)</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Again, setting seed, not sure that it's necessary</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="va">RANDOM</span><span class="op">=</span>314</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="ex">FastTree</span> <span class="at">-gtr</span> <span class="at">-nt</span> <span class="at">-fastest</span> <span class="at">-quiet</span> <span class="at">-log</span> data/04b_Prokaryotic_TreeBuilding/fasttree.log data/04b_Prokaryotic_TreeBuilding/aligned_prok_asvs.fasta  <span class="op">&gt;</span> data/04b_Prokaryotic_TreeBuilding/unrooted_prok.tree</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="plot-with-ggtree" class="level1">
+<h1>Plot with ggtree</h1>
+<p>First load tree and add to phyloseq object</p>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># read tree file</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>tree <span class="ot">&lt;-</span> <span class="fu">read.tree</span>(<span class="st">"data/04b_Prokaryotic_TreeBuilding/unrooted_prok.tree"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="looking-at-our-tree---cant-root-at-archaea" class="level1">
+<h1>Looking at our tree - can’t root at archaea</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tax_table</span>(preprocessed_prok_physeq) <span class="sc">%&gt;%</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(Kingdom)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>      Kingdom     n
+1  d__Archaea     1
+2 d__Bacteria 11039</code></pre>
+</div>
+</div>
+<p>WOAH - only one Archaea! That’s really surprising actually. Did we cut them all with our abundance filtering?</p>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">load</span>(<span class="st">"data/02b_Prokaryotic_Taxonomic_Classification/raw_prok_physeq_noplas.RData"</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="fu">tax_table</span>(raw_prok_physeq_noplas) <span class="sc">%&gt;%</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(Kingdom)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>      Kingdom     n
+1  d__Archaea     5
+2 d__Bacteria 17505</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tax_table</span>(raw_prok_physeq_noplas) <span class="sc">%&gt;%</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(Phylum)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>                         Phylum    n
+1            p__2-12-FULL-45-22    7
+2            p__Acidobacteriota  496
+3             p__Actinomycetota  562
+4              p__Altiarchaeota    2
+5             p__Armatimonadota   68
+6              p__Atribacterota    2
+7              p__Auribacterota    1
+8         p__Bacillota_A_368345  286
+9         p__Bacillota_B_370518    1
+10        p__Bacillota_B_370525    1
+11        p__Bacillota_B_370539    7
+12        p__Bacillota_B_370541    2
+13        p__Bacillota_B_370543    3
+14               p__Bacillota_C   31
+15               p__Bacillota_E    1
+16               p__Bacillota_F    1
+17               p__Bacillota_G    3
+18               p__Bacillota_I   76
+19              p__Bacteroidota 2342
+20   p__Bdellovibrionota_461973  116
+21   p__Bdellovibrionota_473306 1175
+22                      p__CLD3    9
+23                    p__CSP1-3    2
+24             p__Caldisericota    1
+25             p__Calditrichota    3
+26        p__Campylobacterota_A   30
+27               p__Chlamydiota   81
+28             p__Chloroflexota  640
+29            p__Cloacimonadota    8
+30           p__Cyanobacteriota  432
+31              p__Deinococcota   14
+32            p__Delongbacteria   21
+33              p__Dependentiae  229
+34        p__Desulfobacterota_B   67
+35        p__Desulfobacterota_C   31
+36        p__Desulfobacterota_D    1
+37        p__Desulfobacterota_E   10
+38 p__Desulfobacterota_G_459543  190
+39 p__Desulfobacterota_G_459544   94
+40 p__Desulfobacterota_G_459546   79
+41           p__Edwardsbacteria    2
+42             p__Eisenbacteria   43
+43             p__Electryoneota    3
+44           p__Elusimicrobiota  177
+45           p__Eremiobacterota    8
+46                   p__FCPU426   15
+47            p__Fibrobacterota  121
+48         p__Firestonebacteria    8
+49            p__Fusobacteriota   16
+50           p__Gemmatimonadota  121
+51        p__Hinthialibacterota    2
+52          p__Hydrogenedentota   23
+53                      p__KSB1    1
+54       p__Krumholzibacteriota   13
+55          p__Latescibacterota   11
+56          p__Margulisbacteria   89
+57         p__Methylomirabilota   12
+58             p__Moduliflexota    1
+59      p__Myxococcota_A_437813   12
+60      p__Myxococcota_A_473307  534
+61             p__Nanoarchaeota    3
+62              p__Nitrospinota    8
+63     p__Nitrospirota_A_437815  107
+64     p__Nitrospirota_A_437855    2
+65              p__Omnitrophota  427
+66           p__Patescibacteria  783
+67           p__Planctomycetota 1287
+68            p__Pseudomonadota 4530
+69            p__Ratteibacteria    1
+70             p__Riflebacteria   27
+71                  p__SZUA-182    1
+72                   p__SZUA-79    3
+73             p__Spirochaetota  214
+74               p__Sumerlaeota   14
+75    p__Thermosulfidibacterota    6
+76                  p__UBA10199   18
+77                   p__UBA6262    1
+78                   p__UBA8481    7
+79         p__Verrucomicrobiota 1131
+80              p__Zixibacteria   23
+81                         &lt;NA&gt;  580</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>raw_prok_physeq_noplas <span class="sc">%&gt;%</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">psmelt</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Kingdom <span class="sc">==</span> <span class="st">"Archaea"</span>, Abundance <span class="sc">&gt;</span> <span class="dv">0</span>) </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code> [1] OTU       Sample    Abundance Kingdom   Phylum    Class     Order    
+ [8] Family    Genus     Species   ASV       ASVseqs  
+&lt;0 rows&gt; (or 0-length row.names)</code></pre>
+</div>
+</div>
+<p>Damn…only three ASVs. That really is quite wild. Good to know. In silico predictions showed that these primers should be almost as good for Archaea as the V4 EMP primers, but this really seems to show that isn’t the case (unless Archaea are just extremely rare? I doubt that they’re this rare though). But then again, the Paver paper only really observed Archaea in the deep bottom waters, which Erie (mostly) lacks. So maybe this is real. And the few Archaeal ASVs that we did pick up were only in bottom samples from the central basin…really cool!</p>
+<p>That said, we need to decide where to root a tree (typically, we would root at the archaea). Since we have only one Archael ASV, maybe it will still make a nice outgroupIn this case, perhaps we’ll try midpoint rooting as well.</p>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>first_tree_physeq <span class="ot">&lt;-</span> <span class="fu">merge_phyloseq</span>(preprocessed_prok_physeq, tree)</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>rich_phyla <span class="ot">&lt;-</span> first_tree_physeq <span class="sc">%&gt;%</span> </span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">psmelt</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(Phylum) <span class="sc">%&gt;%</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_max</span>(<span class="at">order_by =</span> n, <span class="at">n =</span> <span class="dv">12</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(Phylum)</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>first_tree_physeq <span class="sc">%&gt;%</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">subset_taxa</span>(Kingdom <span class="sc">==</span> <span class="st">"d__Archaea"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">taxa_sums</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>PROK_9864 
+       14 </code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>arch_tree <span class="ot">&lt;-</span> ape<span class="sc">::</span><span class="fu">root</span>(tree, <span class="at">outgroup =</span> <span class="st">"PROK_9864"</span>, <span class="at">resolve.root =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="fu">is.rooted</span>(arch_tree)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] TRUE</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>rooted_physeq <span class="ot">&lt;-</span> <span class="fu">merge_phyloseq</span>(preprocessed_prok_physeq, arch_tree)</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>first_tree <span class="ot">&lt;-</span> <span class="fu">ggtree</span>(rooted_physeq) <span class="sc">+</span> </span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_tippoint</span>(<span class="fu">aes</span>(<span class="at">color =</span> <span class="fu">ifelse</span>(Phylum <span class="sc">==</span> <span class="st">"Proteobacteria"</span>, Class, </span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>                                   <span class="fu">ifelse</span>(Phylum <span class="sc">%in%</span> rich_phyla, Phylum, <span class="st">"Rare"</span>))), <span class="at">alpha =</span> <span class="fl">0.9</span>) <span class="sc">+</span> </span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> phylum_colors) <span class="sc">+</span> </span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> node, <span class="at">color =</span> Phylum), <span class="at">size =</span> <span class="dv">4</span>)</span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>first_tree</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../figures/04b_Prokaryotic_TreeBuilding/first-tree-1.png" class="img-fluid figure-img" width="2100"></p>
+</figure>
+</div>
+</div>
+<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">viewClade</span>(first_tree, <span class="dv">12265</span>) <span class="sc">+</span> </span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> ASV))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../figures/04b_Prokaryotic_TreeBuilding/first-tree-2.png" class="img-fluid figure-img" width="2100"></p>
+</figure>
+</div>
+</div>
+<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>asvs_to_drop <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"PROK_7342"</span>,<span class="st">"PROK_3020"</span>,<span class="st">"PROK_2937"</span>, <span class="st">"PROK_11720"</span>)</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>rooted_physeq <span class="sc">%&gt;%</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">subset_taxa</span>(ASV <span class="sc">%in%</span> asvs_to_drop) <span class="sc">%&gt;%</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tax_table</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Taxonomy Table:     [4 taxa by 9 taxonomic ranks]:
+           Kingdom       Phylum               Class Order Family Genus Species
+PROK_11720 "d__Bacteria" "p__Patescibacteria" NA    NA    NA     NA    NA     
+PROK_2937  "d__Bacteria" NA                   NA    NA    NA     NA    NA     
+PROK_3020  "d__Bacteria" "p__Patescibacteria" NA    NA    NA     NA    NA     
+PROK_7342  "d__Bacteria" "p__Patescibacteria" NA    NA    NA     NA    NA     
+           ASV         
+PROK_11720 "PROK_11720"
+PROK_2937  "PROK_2937" 
+PROK_3020  "PROK_3020" 
+PROK_7342  "PROK_7342" 
+           ASVseqs                                                                                                                                                                                                                                                                                                                                                                                
+PROK_11720 "TACGAGAGGAGCAAGTGTTCTACGGTCCCACTGGGCGTACAGGCTCCTTCAGCGGAGTTCAGAAAGCTTTTTCGATTCTTAATCCTGTACCGATTGAACAGAAAAAGAACTTGAACTCGTGAGGTGAGGTGAGGAGGGCGGTATTCCGAGTCTAGCGTTGCCATGCGGTGACTCTCGGAGGACGGCCATCTGGGGCAGCCAGCCCTCCAACCTCTCCTGACGCTTCGGGAGGAAAGCGTGGGGAGCGATCGAGATTAGAGACCTCGGTAGTCCACGCCCTGATCTATGGGAAGCGGCTTTCTTTGTGCAAGGCACAATAAAGATTGCCAAGCTAACGCAACTTCCTCGCCTGAGAAGTACGATCGCAAGGTTG"
+PROK_2937  "TACGGGAGGGGCGAGTGTTGTTCGGAATGATTGGGCGTAAAGGGGGCGTAGGTTGTTGAAGAAGTTGATATTGAAACATTTGTGTTCATCAGAAAAAAAGGTATCAAAACTGCTCAACTAGGGTCGTATCGGGGGAAGTAGAATTGTTGGTGGAGCAGTTGTAAGCATTGATCTCAATAGGAATACCGGACCTGAAGAGAGCTTCCTAGATACGTACCGACACTGAGGCCCGAAAGCGTGGATAGTCAAGGGGATTAGATACCCCCGTAGCCCACGCCAGAAACGATGCTGACCATTTCCTCGGATAATTTCTGGGGGAGCCAAGTTAACGCTTTAAGTCAGCCGCCTGGGGAGTACGGCCGCAAGGTTA"   
+PROK_3020  "TACGGGAGGGGCAAGTGTTGTTCGGTTTGATTGGGCGTAAAGGGAGTGTAGGTGGACTTTTAGGTTGTTTTTGAAAGGCTTGTGTTTATCAGAAGCAATAAAAACAAAACCGATAGTCTTGGGTCATAAAGAGGGAAGTAGAATTATTGGTGGAGCAGTCACACGCTTTGATCTCAATAGGAATACCAAAGCTGAAGAGAGCTTCCTGGTTATGTACCGACACTGAGTCTCGAAAGCATGGATAGTCAAGGGGATTAGATAACCCCGTAGCCCATGCCCGTAACGATGCTAACCATTTCTTTGGCATTTGGCTGAGGAAACCAAGTAAACGCTTTAAGTTAGCCGCCTGGGAAGTACGATCGCAAGGTTG"   
+PROK_7342  "TACGGGAGGGGCAAGTGTTGTTCGGTTTGATTGGGCGTAAAGGGAGTGTAGGCGGACTTTTAGGTTGTTTTTGAAAGGCTTGTGTTTATCAGAAGCAGTAAAAACAAAACCGATAGTCTTGGGTCATAGAGAGGGAAGTAGAATTATTGGTGGAGCAGTCACACGCTTTGATCTCAATAGGAATACCGAAGCTGAAGAGAGCTTCCTGGTTATGTACCGACGCTGAGTCTCGAAAGCATGGATAGTCAAGGGGATTAGATAACCCCGTAGCCCATGCCCGTAACGATGCTAACTATTTCTTTGGCATTTGGCTGAGGAAACCAAGTAAACGCTTTAAGTTAGCCGCCTGGGAAGTACGATCGCAAGGTTG"   </code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>trim1_physeq <span class="ot">&lt;-</span> </span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  rooted_physeq <span class="sc">%&gt;%</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">subset_taxa</span>(<span class="sc">!</span>ASV <span class="sc">%in%</span> asvs_to_drop)</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>second_tree <span class="ot">&lt;-</span> <span class="fu">ggtree</span>(trim1_physeq) <span class="sc">+</span> </span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_tippoint</span>(<span class="fu">aes</span>(<span class="at">color =</span> Phylum))<span class="sc">+</span></span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> node, <span class="at">color =</span> Phylum), <span class="at">size =</span> <span class="dv">4</span>)</span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>second_tree</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../figures/04b_Prokaryotic_TreeBuilding/first-tree-3.png" class="img-fluid figure-img" width="2100"></p>
+</figure>
+</div>
+</div>
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Looking much better!</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>rich_phyla <span class="ot">&lt;-</span> trim1_physeq <span class="sc">%&gt;%</span> </span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">psmelt</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(Phylum) <span class="sc">%&gt;%</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_max</span>(<span class="at">order_by =</span> n, <span class="at">n =</span> <span class="dv">12</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(Phylum)</span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a><span class="fu">ggtree</span>(trim1_physeq) <span class="sc">+</span> </span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_tippoint</span>(<span class="fu">aes</span>(<span class="at">color =</span> <span class="fu">ifelse</span>(Phylum <span class="sc">==</span> <span class="st">"p__Pseudomonadota"</span>, Class, </span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>                                   <span class="fu">ifelse</span>(Phylum <span class="sc">%in%</span> rich_phyla, Phylum, <span class="st">"Rare"</span>))), <span class="at">alpha =</span> <span class="fl">0.9</span>) <span class="sc">+</span> </span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> phylum_colors) <span class="sc">+</span> </span>
+<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">color =</span> <span class="st">"Phylum"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../figures/04b_Prokaryotic_TreeBuilding/first-tree-4.png" class="img-fluid figure-img" width="2100"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="saving-prokaryotic-tree" class="level1">
+<h1>Saving prokaryotic tree</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>tree_prok_physeq <span class="ot">&lt;-</span> trim1_physeq</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="fu">save</span>(tree_prok_physeq, <span class="at">file =</span> <span class="st">"data/04b_Prokaryotic_TreeBuilding/tree_prok_physeq.RData"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="examining-plastids-really-dont-know-if-this-is-reasonable" class="level1">
+<h1>Examining plastids (really don’t know if this is reasonable)</h1>
+</section>
+<section id="load-data-1" class="level1">
+<h1>Load data</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="fu">load</span>(<span class="st">"data/03b_Prokaryotic_Errors_and_Contamination/preprocessed_plas_physeq.RData"</span>)</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>preprocessed_plas_physeq</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>phyloseq-class experiment-level object
+otu_table()   OTU Table:         [ 599 taxa and 75 samples ]
+sample_data() Sample Data:       [ 75 samples by 8 sample variables ]
+tax_table()   Taxonomy Table:    [ 599 taxa by 11 taxonomic ranks ]</code></pre>
+</div>
+</div>
+</section>
+<section id="write-asv-fasta-file-1" class="level1">
+<h1>Write ASV Fasta file</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># first pull taxonomic table from phyloseq object</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="co"># contains ASV and sequences</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>tax_table <span class="ot">&lt;-</span> preprocessed_plas_physeq<span class="sc">@</span>tax_table <span class="sc">%&gt;%</span> <span class="fu">as.data.frame</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(ASV, ASVseqs)</span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a><span class="co"># add &gt; symbol to ASV names for file formatting</span></span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>tax_table<span class="sc">$</span>ASV <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">"&gt;"</span>,tax_table<span class="sc">$</span>ASV)</span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a><span class="co"># bind ASVs and sequences together in one long character</span></span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>seqs_fasta <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fu">rbind</span>(tax_table<span class="sc">$</span>ASV, tax_table<span class="sc">$</span>ASVseqs))</span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a><span class="co"># write seqs_fasta out as a fasta file</span></span>
+<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a><span class="fu">write</span>(seqs_fasta, <span class="at">file =</span> <span class="st">"data/04b_Prokaryotic_TreeBuilding/preprocessed_plas_asvs.fasta"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="mafft-for-alignment-1" class="level1">
+<h1>MAFFT for Alignment</h1>
+<p>This step aligns the ASV fasta from phyloseq_preprocessing and outputs an aligned fasta file. Note that you should be running this from the project’s home directory!</p>
+<div class="cell" data-layout-align="center" data-engine.opts="-l">
+<div class="sourceCode cell-code" id="cb30"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Run MAFFT on file</span></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a><span class="co"># I am using auto options for now (instead of specifying arguments)</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a><span class="co"># MAFFT automatically recognizes that it is a nucleotide alignment</span></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Set seed (not sure if relevant but not taking chances)</span></span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a><span class="va">RANDOM</span><span class="op">=</span>314</span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a><span class="ex">/programs/mafft/bin/mafft</span> <span class="at">--auto</span> <span class="at">--quiet</span> data/04b_Prokaryotic_TreeBuilding/preprocessed_plas_asvs.fasta <span class="op">&gt;</span> data/04b_Prokaryotic_TreeBuilding/aligned_plas_asvs.fasta </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="fasttree-1" class="level1">
+<h1>FastTree</h1>
+<p>This section of code takes the aligned fasta file and runs it through Fast Tree to output an unrooted tree. It also takes awhile. The end of the logfile will tell you relevant information on who the tree was built.</p>
+<div class="cell" data-layout-align="center" data-engine.opts="-l">
+<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co">#add to path</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">PATH</span><span class="op">=</span>/programs/FastTree-2.1.11:<span class="va">$PATH</span></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a><span class="co"># run command</span></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a><span class="co"># -nt indicates it is a nucleotide alignment </span></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a><span class="co"># -gtr sets the model to a generalized time-reversible model </span></span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a><span class="co"># -fastest speeds up the process and reduces memory usage (recommended for &gt;50,000 sequences) - check if gtr is neighbor-joining</span></span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a><span class="co"># takes aligned_seqs fasta file as input and outputs unrooted.tree</span></span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a><span class="co"># saves log file as fasttree.log (includes intermediate trees, settings, and model details)</span></span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Again, setting seed, not sure that it's necessary</span></span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a><span class="va">RANDOM</span><span class="op">=</span>314</span>
+<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a><span class="ex">FastTree</span> <span class="at">-gtr</span> <span class="at">-nt</span> <span class="at">-fastest</span> <span class="at">-quiet</span> <span class="at">-log</span> data/04b_Prokaryotic_TreeBuilding/fasttree_plas.log data/04b_Prokaryotic_TreeBuilding/aligned_plas_asvs.fasta  <span class="op">&gt;</span> data/04b_Prokaryotic_TreeBuilding/unrooted_plas.tree</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="plot-with-ggtree-1" class="level1">
+<h1>Plot with ggtree</h1>
+<p>First load tree and add to phyloseq object</p>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co"># read tree file</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>tree_plas <span class="ot">&lt;-</span> <span class="fu">read.tree</span>(<span class="st">"data/04b_Prokaryotic_TreeBuilding/unrooted_plas.tree"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="looking-at-our-tree" class="level1">
+<h1>Looking at our tree</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>midroot_tree_plas <span class="ot">&lt;-</span> phytools<span class="sc">::</span><span class="fu">midpoint_root</span>(tree_plas)</span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a><span class="fu">is.rooted</span>(midroot_tree_plas)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] TRUE</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>tree1_plas_physeq <span class="ot">&lt;-</span> <span class="fu">merge_phyloseq</span>(preprocessed_plas_physeq, midroot_tree_plas)</span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>plas_tree <span class="ot">&lt;-</span> <span class="fu">ggtree</span>(tree1_plas_physeq) <span class="sc">+</span> </span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_tippoint</span>(<span class="fu">aes</span>(<span class="at">color =</span> Class)) <span class="sc">+</span></span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> node, <span class="at">color =</span> Class), <span class="at">size =</span> <span class="dv">4</span>)</span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a><span class="fu">viewClade</span>(plas_tree, <span class="dv">601</span>) <span class="sc">+</span> </span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> ASV))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../figures/04b_Prokaryotic_TreeBuilding/first-plas-tree-1.png" class="img-fluid figure-img" width="2100"></p>
+</figure>
+</div>
+</div>
+<div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>bad_tips <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">"PLAS_"</span>, <span class="fu">c</span>(<span class="dv">575</span>, <span class="dv">452</span>, <span class="dv">314</span>, <span class="dv">395</span>, <span class="dv">465</span>, <span class="dv">529</span>, <span class="dv">549</span>, <span class="dv">475</span>, <span class="dv">221</span>))</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>tree1_plas_physeq <span class="sc">%&gt;%</span></span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">subset_taxa</span>(ASV <span class="sc">%in%</span> bad_tips) <span class="sc">%&gt;%</span></span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tax_table</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Taxonomy Table:     [9 taxa by 11 taxonomic ranks]:
+         Domain           Supergroup Division Subdivision Class Order Family
+PLAS_221 "Eukaryota:plas" NA         NA       NA          NA    NA    NA    
+PLAS_475 "Eukaryota:plas" NA         NA       NA          NA    NA    NA    
+PLAS_549 "Eukaryota:plas" NA         NA       NA          NA    NA    NA    
+PLAS_529 "Eukaryota:plas" NA         NA       NA          NA    NA    NA    
+PLAS_465 "Eukaryota:plas" NA         NA       NA          NA    NA    NA    
+PLAS_452 "Eukaryota:plas" NA         NA       NA          NA    NA    NA    
+PLAS_575 "Eukaryota:plas" NA         NA       NA          NA    NA    NA    
+PLAS_395 "Eukaryota:plas" NA         NA       NA          NA    NA    NA    
+PLAS_314 "Eukaryota:plas" NA         NA       NA          NA    NA    NA    
+         Genus Species ASV       
+PLAS_221 NA    NA      "PLAS_221"
+PLAS_475 NA    NA      "PLAS_475"
+PLAS_549 NA    NA      "PLAS_549"
+PLAS_529 NA    NA      "PLAS_529"
+PLAS_465 NA    NA      "PLAS_465"
+PLAS_452 NA    NA      "PLAS_452"
+PLAS_575 NA    NA      "PLAS_575"
+PLAS_395 NA    NA      "PLAS_395"
+PLAS_314 NA    NA      "PLAS_314"
+         ASVseqs                                                                                                                                                                                                                                                                                                                                                                                 
+PLAS_221 "TACGGGAGGGGCAAGCGTTATCCGAAATTACTGGGCGTAAAGCGTCTGTAGATTGTAATATAAGTTATATGTTAAAATTTAAAGCTTAACTTTAAAAAAATATACAATACTGTTTTACTTGAGTTTTATACGGAAGAGTAGAATTTCATGTTAAGGAGTAAATTCCAAGAATACATGAAGGAATATCATTAGCGAAGGCGACTCTTTAGTACAAACTGACATTGAGGGACGAAAGTGTAGGGAGCAAACAGGATTAGATACCCTGGTAGTCTACACTGTAAATTCTGAGTGCTGTAATTTAGAAAATAAATTCTGGATTTTTTAAGCTAACGCCATAAGCATTCCGCCTGAGGAGTACGATTGCAAAATTG"   
+PLAS_475 "TACGAGAGGAGCGAGCATTATTCGAAATGATTAGGCGTAAAGGGTTTGTAGGTTGTTTTTTAAGTTGAAAAAAAAAAATTAAAGCTTAACTTTATTTATTTTTTCAAAACTGATAAACTAGAGTATAAATAGAGGATAATAGAATTCTTATTGTAAGGATAAAATCTTTTAATAATAAGAGGAATTTTCAAGGCGAAGGCAATTATCTGGGTATATACTGACATTGAGAAACGAAAGCTTGGGGAGCGAACGGGATTAGATACCCCGGTAGTCCATGCTGTAAACGATGAGTGCTCATATTTAGAGAAATTTAGATATTTTAAGAAGCTAACGCATTAAGCACTCCGCCTGAAGAGTATAATCGCAAGATTG"  
+PLAS_549 "TACGAGAGGAGCGAGCATTATTCGAAATGATTAGGCGTAAAGGGTTTGTAGATTGTTTTTTAAGTTGAAAAAAAAAAATTAAAGCTTAACTTTATAAATTTTTTCAAAACTAATAAACTAAGAGTATAAATAAAGGATAATAGAATTTTTATTGTAAGGATAAAATCTTTTAATAATAAGAGGAATTTCAAGAGCGAAGGCAATTATCTAGGTATATACTGACATTGAGGAACGAAAGCTTGGGGAGCGAACGGGATTAGATACCCCGGTAGTCCATGCTGTAAAATATGAGTGCTCCTATTTAGATAAATTTGGATAGTTTAAGAAGCTAACGCGTTAAGCACTCCGCCTGAAGAGTATAATCGCAAGATTG" 
+PLAS_529 "TACGAAGGGGGCTAGCGTTATCCGGAATGATTGGGCGTAAAGGGTTCGTAGAATGTTAAAAACTTTTTTAAGTTAAAGATTAGAAAAAAATTTTAAAACGGCTTTTAATAAATTTTAACTTGAGTGTAAGAGAGGATAACAGAATTTCATGCATAGGAGTAAAATCCTTTTATTTATGAAGGAATGCCAAACGCAAAAGCGGTTATCTGGATTATTACTGACATTGAGGAACGAAAGCTTAGGGAGCGAACAGGATTAGATACCCTGGTAGTCTGGGCTGTCAAAGATGATTGTTAATAATAGGGGAATTACTCCTGTTATAAAGCTAACGCGTTAAACACTCCGCCTGGGGAGTACGATTGCAAAATTG"    
+PLAS_465 "TACGAAGGGGGCGAGCGTTATTCGGAATGATTGGGCGTAAAGAGTTTGTAGGTTGTCTTTGTTGCTTTTAGTTAAAAATTAAATTTATTGTTTAATACTGCTATTTTAACATATAAGACTTGAGTTTGAGAGATGATAGCAGAATTCTAACGTTAGGGGTAATATCCAATTATTCGTAGAGGAATGCCTTTGGTAAAAACGGCTATCGATTCCAAAACTGACACTGAGAAACTAAAGCGTAGGGAGCAAACAGAATTAGATACTCTGGTAGTCTACGCTGTCAAAGATGAGTATTAATATTAGGTTCAATTTGCCTGGTATACAGCTAACGCGTTAAATACTCCGCCTGGGAAGTACGGTTGCAAAACTG"    
+PLAS_452 "GACGAGGGGGGTAAGCGTTATCCAGAATAATTGGGCGTAAAGAGTTTGTAGATGGTTAAAGACGCTATTTGTGAAAGCTTAAATGGAAATTTAAAATGGCAAATATAACTCTTTAAACTTGAGTATAAAAGAAGTTAATAGAATTTTATATATAGGGTTAATATCCTTCGACATATAAAGGAATGCCAGCATGGTGAAAACAATTAACTATTTTATTTACTGACATTGAGAAACGAAAGCGTAGGGAGCAAACAGAATTAGATACTCTGGTAGTCTACGCCGTCAAATCTGAATGTTAATGCTAGGTTGATTAATCTAGCAAAAAAGCTAACGCGTTAAACATTCCGCCTGGGAAGTACGATCGCAAGATTA"  
+PLAS_575 "GACGAGGGGGGTAAGCGTTATCCAGAATAATTGGGCGTAAAGAGTTTGTAGGTGGTTAAAGACGCTATTTGTGAAAGCTTAAATGGAAATTTAAAATGGCAAATATAACTCTTTAAACTTGAGTATAAAAGAAGTTAATAGAATTTTATATATAGGGTTAATATCCGTCGACATATAAAGGAATGCCGGCATGGTGAAAACAATTAACTATTTTATTTACTGACATTGAGAAACGAAAGCGTAGGGAGCAAACAGAATTAGATACTCTGGTAGTCTACGCCGTCAAATCTGAATGTTAATGCTAGGTTAAATAATCTAGCAAAAAAGCTAACGCGTTAAACATTCCGCCTGGGAAGTACGATCGCAAGATTA"  
+PLAS_395 "GACGAGGGGGGCGAGCGTTATCCGGAATGATTGGGCGTAAAGAGTTTGTAGGTTGTGAAAGTTGTTATTTGTGAAAGTTTAAATGTGAGTTTAAAAGGGCAACTAAAACACTTTTTACTTGAGTCTAGAAGAAGCTAATAGAATTTTAAATGTAGGGTTAACATCCGGCGACATTTAAAGGAATGCCAGCAAGGCGAAGGCAATTAGCTATCCTAGTTTACTGACACTGAGAAACGAAAGCGTAGGGAGCAAACAGAATTAGATACTCTGGTAGTCTACGCTGTCAAATCTGAATGCTAATGCTTGGTTTTAATAATCTGGTGAAACAGTTAACACGTTAAGCATTCTGCCTGGGGAGTATGATCGCAAGATTG"
+PLAS_314 "GACGAGGGGGGCGAGCGTTATCCGGAATGATTGGGCGTAAAGAGTTTGTAGGTTGTAAAAGTTGTTAGTTGTGAAAGTTTAAATGTAAGTTTAAAAGGGCAACTAAAACACTTTTGCTAGAGTCTAAATGAAGTTAATATAATTTTAAATGTAGGGTTAACATCCTTCGACATTTAAAGGAATGCCAGTAAGGCGAAAGCAATTAACTAACTTAGTATACTGACACTGAGAAACGAAAGCGTAGGGAGCAAACAGAATTAGATACTCTGGTAGTCTACGCCGTCACATCTGAATGCTATTACTTGGTTTTTAAGAATCTGGTGAAACAGCTAACGCGTTAAGCATTCCGCCTGGGGAGTATGATCGCAAGATTG"</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>trim1_plas_physeq <span class="ot">&lt;-</span> </span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>  tree1_plas_physeq <span class="sc">%&gt;%</span></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">subset_taxa</span>(<span class="sc">!</span>ASV <span class="sc">%in%</span> bad_tips)</span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>new_plas_tree <span class="ot">&lt;-</span> phytools<span class="sc">::</span><span class="fu">midpoint_root</span>(<span class="fu">phy_tree</span>(trim1_plas_physeq))</span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a>trim1_plas_physeq<span class="sc">@</span>phy_tree <span class="ot">&lt;-</span> <span class="cn">NULL</span></span>
+<span id="cb38-8"><a href="#cb38-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-9"><a href="#cb38-9" aria-hidden="true" tabindex="-1"></a>tree_plas_physeq <span class="ot">&lt;-</span> <span class="fu">merge_phyloseq</span>(trim1_plas_physeq, new_plas_tree)</span>
+<span id="cb38-10"><a href="#cb38-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-11"><a href="#cb38-11" aria-hidden="true" tabindex="-1"></a><span class="fu">ggtree</span>(tree_plas_physeq) <span class="sc">+</span> </span>
+<span id="cb38-12"><a href="#cb38-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_tippoint</span>(<span class="fu">aes</span>(<span class="at">color =</span> Class))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../figures/04b_Prokaryotic_TreeBuilding/first-plas-tree-2.png" class="img-fluid figure-img" width="2100"></p>
+</figure>
+</div>
+</div>
+<div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="co"># I'll take it</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="saving-plastid-tree" class="level1">
+<h1>Saving plastid tree</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="fu">save</span>(tree_plas_physeq, <span class="at">file =</span> <span class="st">"data/04b_Prokaryotic_TreeBuilding/tree_plas_physeq.RData"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="session-information" class="level1">
+<h1>Session Information</h1>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Reproducibility</span></span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">session_info</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>─ Session info ───────────────────────────────────────────────────────────────
+ setting  value
+ version  R version 4.3.3 (2024-02-29)
+ os       Rocky Linux 9.4 (Blue Onyx)
+ system   x86_64, linux-gnu
+ ui       X11
+ language (EN)
+ collate  en_US.UTF-8
+ ctype    en_US.UTF-8
+ tz       America/New_York
+ date     2025-05-21
+ pandoc   3.1.1 @ /usr/lib/rstudio-server/bin/quarto/bin/tools/ (via rmarkdown)
+ quarto   1.3.450 @ /usr/lib/rstudio-server/bin/quarto/bin/quarto
+
+─ Packages ───────────────────────────────────────────────────────────────────
+ ! package           * version    date (UTC) lib source
+   ade4                1.7-23     2025-02-14 [1] RSPM (R 4.3.3)
+   ape               * 5.8-1      2024-12-16 [1] RSPM (R 4.3.3)
+ P aplot               0.2.5      2025-02-27 [?] RSPM (R 4.3.3)
+   Biobase             2.62.0     2023-10-24 [1] Bioconductor
+   BiocGenerics        0.48.1     2023-11-01 [1] Bioconductor
+   biomformat          1.30.0     2023-10-24 [1] Bioconductor
+   Biostrings          2.70.3     2024-03-13 [1] Bioconductor 3.18 (R 4.3.3)
+   bitops              1.0-9      2024-10-03 [1] RSPM (R 4.3.3)
+   cachem              1.1.0      2024-05-16 [1] RSPM (R 4.3.3)
+ P cli                 3.6.3      2024-06-21 [?] CRAN (R 4.3.2)
+ P cluster             2.1.6      2023-12-01 [?] CRAN (R 4.3.3)
+ P clusterGeneration   1.3.8      2023-08-16 [?] CRAN (R 4.3.2)
+ P coda                0.19-4.1   2024-01-31 [?] CRAN (R 4.3.2)
+ P codetools           0.2-19     2023-02-01 [?] CRAN (R 4.3.3)
+   colorspace          2.1-1      2024-07-26 [1] RSPM (R 4.3.3)
+ P combinat            0.0-8      2012-10-29 [?] CRAN (R 4.3.2)
+   crayon              1.5.3      2024-06-20 [1] RSPM (R 4.3.3)
+ P data.table          1.16.2     2024-10-10 [?] RSPM (R 4.3.3)
+ P DEoptim             2.2-8      2022-11-11 [?] CRAN (R 4.3.2)
+ P devtools            2.4.5      2022-10-11 [?] CRAN (R 4.3.2)
+   digest              0.6.37     2024-08-19 [1] RSPM (R 4.3.3)
+   doParallel          1.0.17     2022-02-07 [1] RSPM (R 4.3.3)
+   dplyr             * 1.1.4      2023-11-17 [1] RSPM (R 4.3.3)
+ P ellipsis            0.3.2      2021-04-29 [?] CRAN (R 4.3.2)
+ P evaluate            1.0.1      2024-10-10 [?] RSPM (R 4.3.3)
+ P expm                1.0-0      2024-08-19 [?] CRAN (R 4.3.2)
+   farver              2.1.2      2024-05-13 [1] RSPM (R 4.3.3)
+   fastmap             1.2.0      2024-05-15 [1] RSPM (R 4.3.3)
+ P fastmatch           1.1-6      2024-12-23 [?] CRAN (R 4.3.2)
+   forcats           * 1.0.0      2023-01-29 [1] RSPM (R 4.3.3)
+   foreach             1.5.2      2022-02-02 [1] RSPM (R 4.3.3)
+   fs                  1.6.5      2024-10-30 [1] RSPM (R 4.3.3)
+   generics            0.1.3      2022-07-05 [1] RSPM (R 4.3.3)
+   GenomeInfoDb        1.38.8     2024-03-15 [1] Bioconductor 3.18 (R 4.3.3)
+   GenomeInfoDbData    1.2.11     2025-04-11 [1] Bioconductor
+ P ggfun               0.1.8      2024-12-03 [?] CRAN (R 4.3.2)
+   ggplot2           * 3.5.2      2025-04-09 [1] RSPM (R 4.3.3)
+ P ggplotify           0.1.2      2023-08-09 [?] CRAN (R 4.3.2)
+ P ggtree            * 3.10.1     2024-02-25 [?] Bioconduc~
+   glue                1.8.0      2024-09-30 [1] RSPM (R 4.3.3)
+ P gridGraphics        0.5-1      2020-12-13 [?] CRAN (R 4.3.2)
+   gtable              0.3.6      2024-10-25 [1] RSPM (R 4.3.3)
+   hms                 1.1.3      2023-03-21 [1] RSPM (R 4.3.3)
+   htmltools           0.5.8.1    2024-04-04 [1] RSPM (R 4.3.3)
+ P htmlwidgets         1.6.4      2023-12-06 [?] CRAN (R 4.3.2)
+ P httpuv              1.6.15     2024-03-26 [?] CRAN (R 4.3.2)
+   igraph              2.1.4      2025-01-23 [1] RSPM (R 4.3.3)
+   IRanges             2.36.0     2023-10-24 [1] Bioconductor
+   iterators           1.0.14     2022-02-05 [1] RSPM (R 4.3.3)
+   jsonlite            2.0.0      2025-03-27 [1] RSPM (R 4.3.3)
+ P knitr               1.49       2024-11-08 [?] CRAN (R 4.3.2)
+   labeling            0.4.3      2023-08-29 [1] RSPM (R 4.3.3)
+ P later               1.3.2      2023-12-06 [?] CRAN (R 4.3.2)
+ P lattice             0.22-5     2023-10-24 [?] CRAN (R 4.3.3)
+ P lazyeval            0.2.2      2019-03-15 [?] CRAN (R 4.3.2)
+   lifecycle           1.0.4      2023-11-07 [1] RSPM (R 4.3.3)
+   lubridate         * 1.9.4      2024-12-08 [1] RSPM (R 4.3.3)
+   magrittr            2.0.3      2022-03-30 [1] RSPM (R 4.3.3)
+ P maps              * 3.4.2.1    2024-11-10 [?] CRAN (R 4.3.2)
+ P MASS                7.3-60.0.1 2024-01-13 [?] CRAN (R 4.3.3)
+ P Matrix              1.6-5      2024-01-11 [?] CRAN (R 4.3.3)
+   memoise             2.0.1      2021-11-26 [1] RSPM (R 4.3.3)
+ P mgcv                1.9-1      2023-12-21 [?] CRAN (R 4.3.3)
+ P mime                0.12       2021-09-28 [?] CRAN (R 4.3.2)
+ P miniUI              0.1.1.1    2018-05-18 [?] CRAN (R 4.3.2)
+ P mnormt              2.1.1      2022-09-26 [?] CRAN (R 4.3.2)
+   multtest            2.58.0     2023-10-24 [1] Bioconductor
+   munsell             0.5.1      2024-04-01 [1] RSPM (R 4.3.3)
+ P nlme                3.1-164    2023-11-27 [?] CRAN (R 4.3.3)
+ P numDeriv            2016.8-1.1 2019-06-06 [?] CRAN (R 4.3.2)
+ P optimParallel       1.0-2      2021-02-11 [?] CRAN (R 4.3.2)
+ P pacman              0.5.1      2019-03-11 [?] CRAN (R 4.3.2)
+   patchwork         * 1.3.0      2024-09-16 [1] RSPM (R 4.3.3)
+   permute             0.9-7      2022-01-27 [1] RSPM (R 4.3.3)
+ P phangorn            2.12.1     2024-09-17 [?] CRAN (R 4.3.2)
+   phyloseq          * 1.46.0     2023-10-24 [1] Bioconductor
+ P phytools          * 2.4-4      2025-01-08 [?] CRAN (R 4.3.2)
+   pillar              1.10.2     2025-04-05 [1] RSPM (R 4.3.3)
+ P pkgbuild            1.4.7      2025-03-24 [?] RSPM (R 4.3.3)
+   pkgconfig           2.0.3      2019-09-22 [1] RSPM (R 4.3.3)
+ P pkgload             1.4.0      2024-06-28 [?] CRAN (R 4.3.2)
+   plyr                1.8.9      2023-10-02 [1] RSPM (R 4.3.3)
+ P profvis             0.4.0      2024-09-20 [?] CRAN (R 4.3.2)
+ P promises            1.3.0      2024-04-05 [?] CRAN (R 4.3.2)
+ P purrr             * 1.0.2      2023-08-10 [?] CRAN (R 4.3.2)
+ P quadprog            1.5-8      2019-11-20 [?] CRAN (R 4.3.2)
+ P R6                  2.5.1      2021-08-19 [?] CRAN (R 4.3.2)
+ P Rcpp                1.0.13-1   2024-11-02 [?] RSPM (R 4.3.3)
+   RCurl               1.98-1.17  2025-03-22 [1] RSPM (R 4.3.3)
+   readr             * 2.1.5      2024-01-10 [1] RSPM (R 4.3.3)
+ P remotes             2.5.0      2024-03-17 [?] CRAN (R 4.3.2)
+   renv                1.0.3      2023-09-19 [1] CRAN (R 4.3.3)
+   reshape2            1.4.4      2020-04-09 [1] RSPM (R 4.3.3)
+   rhdf5               2.46.1     2023-11-29 [1] Bioconductor 3.18 (R 4.3.3)
+   rhdf5filters        1.14.1     2023-11-06 [1] Bioconductor
+   Rhdf5lib            1.24.2     2024-02-07 [1] Bioconductor 3.18 (R 4.3.3)
+ P rlang               1.1.4      2024-06-04 [?] CRAN (R 4.3.2)
+   rmarkdown           2.29       2024-11-04 [1] RSPM (R 4.3.3)
+   rstudioapi          0.17.1     2024-10-22 [1] RSPM (R 4.3.3)
+   S4Vectors           0.40.2     2023-11-23 [1] Bioconductor 3.18 (R 4.3.3)
+   scales              1.3.0      2023-11-28 [1] RSPM (R 4.3.3)
+ P scatterplot3d       0.3-44     2023-05-05 [?] CRAN (R 4.3.2)
+ P sessioninfo         1.2.3      2025-02-05 [?] RSPM (R 4.3.3)
+ P shiny               1.9.1      2024-08-01 [?] CRAN (R 4.3.2)
+   stringi             1.8.7      2025-03-27 [1] RSPM (R 4.3.3)
+   stringr           * 1.5.1      2023-11-14 [1] RSPM (R 4.3.3)
+ P survival            3.5-8      2024-02-14 [?] CRAN (R 4.3.3)
+   tibble            * 3.2.1      2023-03-20 [1] RSPM (R 4.3.3)
+   tidyr             * 1.3.1      2024-01-24 [1] RSPM (R 4.3.3)
+   tidyselect          1.2.1      2024-03-11 [1] RSPM (R 4.3.3)
+ P tidytree          * 0.4.6      2023-12-12 [?] CRAN (R 4.3.2)
+   tidyverse         * 2.0.0      2023-02-22 [1] RSPM (R 4.3.3)
+   timechange          0.3.0      2024-01-18 [1] RSPM (R 4.3.3)
+ P treeio              1.33.0     2025-04-17 [?] Github (GuangchuangYu/treeio@f5a6dec)
+   tzdb                0.5.0      2025-03-15 [1] RSPM (R 4.3.3)
+ P urlchecker          1.0.1      2021-11-30 [?] CRAN (R 4.3.2)
+ P usethis             3.1.0      2024-11-26 [?] CRAN (R 4.3.2)
+   vctrs               0.6.5      2023-12-01 [1] RSPM (R 4.3.3)
+   vegan               2.6-10     2025-01-29 [1] RSPM (R 4.3.3)
+   withr               3.0.2      2024-10-28 [1] RSPM (R 4.3.3)
+ P xfun                0.49       2024-10-31 [?] RSPM (R 4.3.3)
+ P xtable              1.8-4      2019-04-21 [?] CRAN (R 4.3.2)
+   XVector             0.42.0     2023-10-24 [1] Bioconductor
+   yaml                2.3.10     2024-07-26 [1] RSPM (R 4.3.3)
+ P yulab.utils         0.2.0      2025-01-29 [?] RSPM (R 4.3.3)
+   zlibbioc            1.48.2     2024-03-13 [1] Bioconductor 3.18 (R 4.3.3)
+
+ [1] /local/workdir/arp277/AAM_ERI_2024/renv/library/R-4.3/x86_64-pc-linux-gnu
+ [2] /home/arp277/.cache/R/renv/sandbox/R-4.3/x86_64-pc-linux-gnu/fd835031
+
+ * ── Packages attached to the search path.
+ P ── Loaded and on-disk path mismatch.
+
+──────────────────────────────────────────────────────────────────────────────</code></pre>
+</div>
+</div>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>

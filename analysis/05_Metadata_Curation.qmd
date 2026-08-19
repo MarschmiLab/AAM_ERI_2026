@@ -1,0 +1,756 @@
+---
+title: "Curating and Cleaning Metadata" 
+author: "Augustus Pendleton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+knitr: 
+  opts_chunk: 
+    fig.path: ../figures/05_Metadata_Curation/
+editor_options: 
+  chunk_output_type: console
+---
+
+# Purpose of this document
+
+
+# Load Packages and Functions
+
+```{r load-pack}
+# Load Packages
+pacman::p_load(phyloseq, fun.gus, tidyverse, install = FALSE)
+
+# load colors and shapes
+source("code/R/plotting_aesthetics.R")
+
+load("data/04b_Prokaryotic_TreeBuilding/tree_prok_physeq.RData")
+
+```
+
+
+# Loading Schmidt Metadata
+
+```{r schmidt-metadata}
+
+load_schmidt_metadata(path_to_data_dir = "../SCHMIDT_LAB_DATA_LOG/",
+                      name_vector = c("Station_Log", "Deployment_Log", "Freezer_Log", "FP_Process_Details", "FC_Process_Details", "DNA_Log"),
+                      project = "AAM",
+                      as_list = FALSE)
+
+```
+
+
+```{r}
+
+sample_info_raw <- Freezer_Log %>%
+  dplyr::filter(Location_ID == "ERI") %>%
+  select(Sample_ID, Station_ID, Deployment_ID, Date_Collected, Notes) %>%
+  left_join(Deployment_Log, by = "Deployment_ID") %>% 
+  select(Sample_ID, Station_ID = Station_ID.x, Date_Collected, Deployment_Depth_m, Integrated_Depths_m, Temp_at_Deployment, Notes.x, Notes.y) %>%
+  mutate(Depth = ifelse(!is.na(Deployment_Depth_m), Deployment_Depth_m, 
+                        ifelse(!is.na(Integrated_Depths_m), 5, NA)),
+         Notes = paste(Notes.x, Notes.y)) %>%
+  select(-Deployment_Depth_m, -Integrated_Depths_m, -Notes.x, -Notes.y) %>% 
+  left_join(Station_Log, by = c("Station_ID", "Date_Collected" = "Date")) %>%
+  mutate(Notes = paste(Notes.x, Notes.y)) %>%
+  rowwise() %>%
+  mutate(Notes = list(c(Notes))) %>%
+  ungroup() %>%
+  select(Sample_ID, Station_ID, Date = Date_Collected, Depth, Station_Name, Water_Surface_Temp_C, Latitude, Longitude, Notes) %>%
+  mutate(Month = case_when(str_detect(Date, "202405") ~ "May",
+                           str_detect(Date, "202408") ~ "August",
+                           str_detect(Date, "202409") ~ "September"),
+         Depth_Class = ifelse(Depth == 5, "S", "B"),
+         Rep_ID = paste(Month, Station_ID, Depth_Class, sep = "_")) %>%
+  left_join(read_tsv("data/05_Metadata_Curation/basin_info.tsv"))
+
+head(sample_info_raw)
+
+```
+
+# Joining sample data to physeq
+
+
+```{r joining-meta-and-physeq}
+
+new_metadata <- 
+  sample_data(tree_prok_physeq) %>%
+  data.frame() %>% 
+  left_join(DNA_Log) %>%
+  select(Sample_ID, DNA_ID:perc_reads_retained, Notes) %>%
+  left_join(sample_info_raw, by = "Sample_ID") %>% 
+  mutate(Notes = paste(Notes.x, Notes.y)) %>% 
+  select(-Notes.x, -Notes.y)
+
+```
+
+# Bringing in toxins
+
+# Load metadata
+We will load in our particulate toxin metadata. Greg Boyer's lab sent us the .xlsx as well as a .pdf summary of the toxin report (the .xlsx just has more detail but same values). I took the .xlsx report and cleaned up the data so that it would be easier to parse through R.
+```{r load-metadata}
+# read in cleaned csv file
+toxin_metadata <- readr::read_csv("data/05_Metadata_Curation/toxins/toxins_cleaned.csv")
+```
+
+# Process metadata
+Lets format our metadata to be cleaner
+```{r process-metadata}
+clean_toxins <- toxin_metadata %>%
+  mutate(
+    Month = case_when(
+                grepl("202408", Sample_ID) ~ "August",
+                grepl("202409", Sample_ID) ~ "September",
+                TRUE ~ "Unknown"
+                      ),
+  Station_ID = word(Sample_ID, 4, sep = "_"), 
+  Depth_Class = "S", 
+  Toxins_Measured = "Yes",
+  Microcystin_Total = ifelse(is.na(Microcystin_Total), 0, Microcystin_Total),
+  Anatoxin_Total = ifelse(is.na(Anatoxin_Total), 0, Anatoxin_Total)) %>%
+  filter(Filter_Type == "GFF") %>%
+  select(Microcystin_Total, Anatoxin_Total, Toxins_Measured, Month, Station_ID, Depth_Class)
+
+sample_info <- 
+  sample_info_raw %>%
+  left_join(clean_toxins, by = c("Month", "Depth_Class", "Station_ID"))
+
+
+meta_w_toxins <- new_metadata %>%
+  left_join(clean_toxins, by = c("Month", "Depth_Class", "Station_ID"))
+
+
+
+```
+
+# Reading in Water Quality
+
+```{r read-wq}
+
+raw_wq <- openxlsx::read.xlsx("data/05_Metadata_Curation/2024_CSMI_WaterQuality.xlsx", sheet = "Water Quality Data")
+
+clean_wq <- raw_wq %>%
+  janitor:::clean_names() %>%
+  filter(ship != "R/V Lake Explorer II") %>%
+  select(site, date, depth_category, depth_collected_m:po_n_ug_n_l) %>%
+  mutate(adj_depth_category = ifelse(as.numeric(depth_collected_m)< 10, "EPI", depth_category),
+         adj_depth_category = ifelse(is.na(adj_depth_category), depth_category, adj_depth_category)) %>%
+  filter(adj_depth_category %in% c("EPI","B-")) %>%
+  mutate(Station_ID = str_replace(site, "G", "6"),
+         Station_ID = str_remove_all(Station_ID, "[^0-9]"),
+         Station_ID = str_replace(Station_ID, "609", "G09")) %>% 
+  mutate(date = openxlsx::convertToDate(date),
+         Month = month(date, label = TRUE, abbr = FALSE)) %>%
+  mutate(Depth_Class = ifelse(adj_depth_category == "EPI", "S", "B")) %>%
+  mutate(across(depth_collected_m:po_n_ug_n_l, .fn = as.numeric)) %>%
+  group_by(Month, Depth_Class, Station_ID) %>%
+  summarize(across(depth_collected_m:po_n_ug_n_l, .fn = \(x)mean(x, na.rm = TRUE))) %>%
+  select(Station_ID, Month, Depth_Class, nh4_ug_n_l:po_n_ug_n_l)
+
+```
+
+
+
+# Okay let's work with August (MESSY)
+
+```{r}
+
+august_raw <- read_csv("data/05_Metadata_Curation/August_WaterQuality.csv") %>%
+  janitor::clean_names()
+
+
+aug_1 <- 
+august_raw %>%
+mutate(Depth_Class= case_when(depth_code == "Surface" ~ "S",
+                                  sample_depth_m < 10 ~ "S",
+                                  depth_code == "Bottom Minus" ~ "B",
+                              TRUE ~ "DISCARD")) %>%
+  filter(Depth_Class != "DISCARD",
+         qc_type == "routine field sample") %>% 
+  select(month, station_id, sample_depth_m, depth_code, Depth_Class, starts_with("analyte"), starts_with("value")) %>%
+  mutate(av1 = paste(analyte_1, value_1, sep = ";;;"),
+         av2 = paste(analyte_2, value_2, sep = ";;;"),
+         av3 = paste(analyte_3, value_3, sep = ";;;"),
+         av4 = paste(analyte_4, value_4, sep = ";;;"),
+         av5 = paste(analyte_5, value_5, sep = ";;;"),
+         av6 = paste(analyte_6, value_6, sep = ";;;"),
+         av7 = paste(analyte_7, value_7, sep = ";;;"),
+         av8 = paste(analyte_8, value_8, sep = ";;;"),
+         av9 = paste(analyte_9, value_9, sep = ";;;"),
+         av10 = paste(analyte_10, value_10, sep = ";;;"),
+         av11 = paste(analyte_11, value_11, sep = ";;;"),
+         av12 = paste(analyte_12, value_12, sep = ";;;"),
+         av13 = paste(analyte_13, value_13, sep = ";;;"),
+         av14 = paste(analyte_14, value_14, sep = ";;;"),
+         av15 = paste(analyte_15, value_15, sep = ";;;"),
+         av16 = paste(analyte_16, value_16, sep = ";;;"),
+         av17 = paste(analyte_17, value_17, sep = ";;;")
+         ) %>% 
+  select(month, station_id, sample_depth_m, depth_code, Depth_Class, starts_with("av")) %>%
+  pivot_longer(av1:av17) %>%
+  separate_wider_delim(value, delim = ";;;", names= c("Analyte", "Value")) %>%
+  select(-name) %>% 
+  mutate(Value = ifelse(Value == "<0.5", 0.25, as.numeric(Value))) %>% # For orthophosphate < 0.5, set at 0.25 like for CSMI
+  filter(Analyte != "NA") %>% 
+  group_by(month, station_id, sample_depth_m, depth_code, Depth_Class, Analyte) %>%
+  summarize(Value = mean(Value, na.rm = TRUE)) %>%
+  ungroup() %>%
+  pivot_wider(names_from = Analyte, values_from = Value, id_cols = c(month, station_id, sample_depth_m, depth_code, Depth_Class)) %>% 
+  janitor::clean_names() %>% 
+  group_by(month, station_id, depth_class) %>%
+  summarize(across(alkalinity_total_as_ca_co3:p_h, \(x)mean(x,na.rm = TRUE))) %>%
+  mutate(Station_ID = str_replace(station_id, "G", "6"),
+         Station_ID = str_remove_all(Station_ID, "[^0-9]"),
+         Station_ID = str_replace(Station_ID, "609", "G09")) %>%
+  select(Month = month, Station_ID, Depth_Class = depth_class, 
+         n_ox_ug_n_l = nitrogen_total_oxidized, 
+         srp_ug_p_l = phosphorus_orthophosphorus_as_p,
+         tn_ug_n_l = nitrogen_total,
+         tp_ug_p_l = phosphorus_total_as_p,
+         k_mg_l = potassium,
+         na_mg_l = sodium,
+         ca_mg_l = calcium,
+         mg_mg_l = magnesium,
+         cl_mg_l = chloride,
+         chl_a_ug_l = chlorophyll_a, 
+         si_mg_si_o2_l = silica_dissolved_as_si,
+         pH = p_h)
+
+# For these shallow nearshore stations, most data was collected for the "integrated, summer" type, rather than the surface. 
+
+
+aug_1 %>%
+  filter(is.na(n_ox_ug_n_l))
+
+int_stations <- aug_1 %>%
+  filter(is.na(n_ox_ug_n_l)) %>%
+  pull(station_id)
+
+aug_2 <- 
+august_raw %>%
+mutate(Depth_Class= case_when(depth_code == "Surface" ~ "S",
+                                  sample_depth_m < 10 ~ "S",
+                                station_id %in% int_stations & depth_code == "Integrated, Summer" ~ "S",
+                                  depth_code == "Bottom Minus" ~ "B",
+                              TRUE ~ "DISCARD")) %>%
+  filter(Depth_Class != "DISCARD",
+         qc_type == "routine field sample") %>% 
+  select(month, station_id, sample_depth_m, depth_code, Depth_Class, starts_with("analyte"), starts_with("value")) %>%
+  mutate(av1 = paste(analyte_1, value_1, sep = ";;;"),
+         av2 = paste(analyte_2, value_2, sep = ";;;"),
+         av3 = paste(analyte_3, value_3, sep = ";;;"),
+         av4 = paste(analyte_4, value_4, sep = ";;;"),
+         av5 = paste(analyte_5, value_5, sep = ";;;"),
+         av6 = paste(analyte_6, value_6, sep = ";;;"),
+         av7 = paste(analyte_7, value_7, sep = ";;;"),
+         av8 = paste(analyte_8, value_8, sep = ";;;"),
+         av9 = paste(analyte_9, value_9, sep = ";;;"),
+         av10 = paste(analyte_10, value_10, sep = ";;;"),
+         av11 = paste(analyte_11, value_11, sep = ";;;"),
+         av12 = paste(analyte_12, value_12, sep = ";;;"),
+         av13 = paste(analyte_13, value_13, sep = ";;;"),
+         av14 = paste(analyte_14, value_14, sep = ";;;"),
+         av15 = paste(analyte_15, value_15, sep = ";;;"),
+         av16 = paste(analyte_16, value_16, sep = ";;;"),
+         av17 = paste(analyte_17, value_17, sep = ";;;")
+         ) %>% 
+  select(month, station_id, sample_depth_m, depth_code, Depth_Class, starts_with("av")) %>%
+  pivot_longer(av1:av17) %>%
+  separate_wider_delim(value, delim = ";;;", names= c("Analyte", "Value")) %>%
+  select(-name) %>% 
+  mutate(Value = ifelse(Value == "<0.5", 0.25, as.numeric(Value))) %>% # For orthophosphate < 0.5, set at 0.25 like for CSMI
+  filter(Analyte != "NA") %>% 
+  group_by(month, station_id, sample_depth_m, depth_code, Depth_Class, Analyte) %>%
+  summarize(Value = mean(Value, na.rm = TRUE)) %>%
+  ungroup() %>%
+  pivot_wider(names_from = Analyte, values_from = Value, id_cols = c(month, station_id, sample_depth_m, depth_code, Depth_Class)) %>% 
+  janitor::clean_names() %>% 
+  group_by(month, station_id, depth_class) %>%
+  summarize(across(alkalinity_total_as_ca_co3:p_h, \(x)mean(x,na.rm = TRUE))) %>%
+  ungroup() %>%
+  mutate(Station_ID = str_replace(station_id, "G", "6"),
+         Station_ID = str_remove_all(Station_ID, "[^0-9]"),
+         Station_ID = str_replace(Station_ID, "609", "G09")) %>%
+  select(Month = month, Station_ID, Depth_Class = depth_class, 
+         n_ox_ug_n_l = nitrogen_total_oxidized, 
+         srp_ug_p_l = phosphorus_orthophosphorus_as_p,
+         tn_ug_n_l = nitrogen_total,
+         tp_ug_p_l = phosphorus_total_as_p,
+         k_mg_l = potassium,
+         na_mg_l = sodium,
+         ca_mg_l = calcium,
+         mg_mg_l = magnesium,
+         cl_mg_l = chloride,
+         chl_a_ug_l = chlorophyll_a, 
+         si_mg_si_o2_l = silica_dissolved_as_si,
+         pH = p_h)
+
+aug_2 %>%
+  filter(is.na(n_ox_ug_n_l))
+
+# Better!
+
+
+
+```
+
+# Join Water Qualities together
+
+```{r}
+
+all_months <- bind_rows(clean_wq, aug_2)
+
+all_months %>%
+  pivot_longer(nh4_ug_n_l:pH, names_to = "Analyte", values_to = "Value") %>%
+  ggplot(aes(x = Month, y = Value)) + 
+  geom_boxplot() + 
+  geom_point() + 
+  facet_wrap(~Analyte, scales = "free_y")
+
+# Our nitrogens are in different units
+
+all_months2 <- 
+  all_months %>%
+  mutate(n_ox_ug_n_l = ifelse(Month == "August", n_ox_ug_n_l * 1000, n_ox_ug_n_l),
+         tn_ug_n_l = ifelse(Month == "August", tn_ug_n_l * 1000, tn_ug_n_l),
+         np_ratio = (tn_ug_n_l / 14) / (tp_ug_p_l/31))
+
+all_months2 %>%
+  pivot_longer(nh4_ug_n_l:np_ratio, names_to = "Analyte", values_to = "Value") %>%
+  ggplot(aes(x = Month, y = Value)) + 
+  geom_boxplot() + 
+  geom_point() + 
+  facet_wrap(~Analyte, scales = "free_y")
+
+missings <- anti_join(meta_w_toxins, all_months2) %>%
+  select(Station_ID, Month, Missing_DC = Depth_Class)
+
+missings
+
+# GOOD
+```
+
+GOOD!
+
+# Join Water Quality and CTD
+
+```{r}
+
+ctd_data <- read_csv("data/05_Metadata_Curation/all_ctd_summary.csv")
+
+clean_ctd_for_join <- ctd_data %>%
+  select(Station_ID, Month, starts_with("bottom"), starts_with("intsurf")) %>%
+  pivot_longer(!c(Station_ID, Month)) %>%
+  separate_wider_delim(name, delim = "_", names = c("Depth_Class","CTD_Parameter")) %>%
+  mutate(Depth_Class = ifelse(Depth_Class == "bottom", "B", "S")) %>%
+  pivot_wider(names_from = CTD_Parameter, values_from = value, names_prefix = "ctd_")
+
+station_lats <- readxl::read_xlsx("data/external_data/20240404_Scofield_Erie2024_CSMI_StationList.xlsx") %>%
+  select(Station_ID = Our_Station_ID, Latitude = lattDD_target, Longitude = LonDD_target)
+
+clean_ctd_for_join$Station_ID[!clean_ctd_for_join$Station_ID %in% station_lats$Station_ID]
+
+summarized_ctd_latlon <- 
+  clean_ctd_for_join %>%
+  left_join(station_lats) 
+
+ctd_and_wq <- summarized_ctd_latlon %>%
+  full_join(all_months2)
+
+```
+
+
+
+```{r load-mapping-packages}
+
+pacman::p_load(sf, terra, install = FALSE)
+
+# Define some shapes and objects
+
+raw_erie <- read_sf("data/spatial_imports/hydro_p_LakeErie/hydro_p_LakeErie.shp") %>%
+  st_transform(crs = "EPSG:4326")
+
+erie_outline <- raw_erie %>%
+  st_union()
+
+meta_sf <- ctd_and_wq %>% 
+  dplyr::filter(!is.na(Longitude)) %>% 
+  st_as_sf(coords = c("Longitude","Latitude"), crs = "EPSG:4326") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September") ))
+
+```
+
+```{r Figure2d_f, fig.width = 14, fig.height = 4}
+
+bottom_sf <- meta_sf %>%
+  dplyr::filter(Depth_Class == "B")
+
+shift_bottom_sf <- bottom_sf
+
+st_geometry(shift_bottom_sf) <- st_geometry(bottom_sf) + c(.06,-.03)
+
+shift_bottom_sf <- st_set_crs(shift_bottom_sf, st_crs(bottom_sf))
+
+meta_sf %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = shift_bottom_sf, aes(color = ctd_temperature), size = 5, alpha = 1) + 
+  geom_sf(aes(color = ctd_temperature), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "Integrated\nTemperature (C)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+meta_sf %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = shift_bottom_sf, aes(color = ctd_oxygen), size = 5, alpha = 1) + 
+  geom_sf(aes(color = ctd_oxygen), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "Dissolved\nOxygen") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+meta_sf %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  filter(Month == "August") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = filter(shift_bottom_sf, Month == "August"), aes(color = ctd_oxygen), size = 5, alpha = 1) + 
+  geom_sf(aes(color = ctd_oxygen), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "Dissolved\nOxygen") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+ggsave("test.png", width = 7, height = 7, dpi = 300)
+
+meta_sf %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  filter(Month == "August") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = filter(shift_bottom_sf, Month == "August"), aes(color = srp_ug_p_l), size = 5, alpha = 1) + 
+  geom_sf(aes(color = srp_ug_p_l), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "SRP (ug P/L)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+ggsave("test.png", width = 7, height = 7, dpi = 300)
+
+meta_sf %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = shift_bottom_sf, aes(color = tn_ug_n_l), size = 5, alpha = 1) + 
+  geom_sf(aes(color = tn_ug_n_l), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", transform = "log10") + 
+  labs(color = "TN (ug N/L)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+meta_sf %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = shift_bottom_sf, aes(color = tp_ug_p_l), size = 5, alpha = 1) + 
+  geom_sf(aes(color = tp_ug_p_l), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", transform = "log10") + 
+  labs(color = "TP (ug P/L)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+meta_sf %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = shift_bottom_sf, aes(color = np_ratio), size = 5, alpha = 1) + 
+  geom_sf(aes(color = np_ratio), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", transform = "log10") + 
+  labs(color = "N:P (Molar)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+meta_sf %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = shift_bottom_sf, aes(color = srp_ug_p_l), size = 5, alpha = 1) + 
+  geom_sf(aes(color = srp_ug_p_l), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", transform = "log10") + 
+  labs(color = "SRP (ug P/L)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+
+meta_sf %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = shift_bottom_sf, aes(color = ctd_beamAttenuation), size = 5, alpha = 1) + 
+  geom_sf(aes(color = ctd_beamAttenuation), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", transform = "log10") + 
+  labs(color = "Beam Attenuation") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+meta_sf %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = shift_bottom_sf, aes(color = ctd_beamAttenuation), size = 5, alpha = 1) + 
+  geom_sf(aes(color = ctd_beamAttenuation), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", transform = "log10", limits = c(NA,10)) + 
+  labs(color = "Beam Attenuation\n(remove bloom)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+meta_sf %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = shift_bottom_sf, aes(color = ctd_upoly), size = 5, alpha = 1) + 
+  geom_sf(aes(color = ctd_upoly), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", transform = "log10") + 
+  labs(color = "UPoly") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+```
+
+Simplified for paper
+
+```{r nutrients, fig.width = 10, fig.height = 4}
+
+bottom_sf <- meta_sf %>%
+  dplyr::filter(Depth_Class == "B", Month != "May")
+
+shift_bottom_sf <- bottom_sf
+
+st_geometry(shift_bottom_sf) <- st_geometry(bottom_sf) + c(.06,-.03)
+
+shift_bottom_sf <- st_set_crs(shift_bottom_sf, st_crs(bottom_sf))
+
+meta_sf %>%
+  filter(Month != "May") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = shift_bottom_sf, aes(color = tn_ug_n_l), size = 5, alpha = 1) + 
+  geom_sf(aes(color = tn_ug_n_l), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", transform = "log10") + 
+  labs(color = "TN (ug N/L)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+meta_sf %>%
+  filter(Month != "May") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = shift_bottom_sf, aes(color = tp_ug_p_l), size = 5, alpha = 1) + 
+  geom_sf(aes(color = tp_ug_p_l), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", transform = "log10") + 
+  labs(color = "TP (ug P/L)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+meta_sf %>%
+  filter(Month != "May") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = shift_bottom_sf, aes(color = np_ratio), size = 5, alpha = 1) + 
+  geom_sf(aes(color = np_ratio), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", transform = "log10") + 
+  labs(color = "N:P (Molar)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+meta_sf %>%
+  filter(Month != "May") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = shift_bottom_sf, aes(color = srp_ug_p_l), size = 5, alpha = 1) + 
+  geom_sf(aes(color = srp_ug_p_l), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", transform = "log10") + 
+  labs(color = "SRP (ug P/L)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+
+
+
+```
+
+```{r temp_oxy, fig.width = 10, fig.height = 4}
+
+
+meta_sf %>%
+  filter(Month != "May", Depth_Class == "S") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = ctd_temperature), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "Surface\nTemp. (°C)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+meta_sf %>%
+  filter(Month != "May", Depth_Class == "B") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = ctd_temperature), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "Bottom\nTemp. (°C)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+meta_sf %>%
+  filter(Month != "May", Depth_Class == "S") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = ctd_oxygen), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "Surface\nOxygen (mg/L)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+meta_sf %>%
+  filter(Month != "May", Depth_Class == "B") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = ctd_oxygen), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "Bottom\nOxygen (mg/L)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+
+```
+
+# Join in Sample Data
+
+```{r}
+
+ctd_and_wq_for_join <- 
+  ctd_and_wq %>%
+  select(-Longitude, -Latitude)
+
+meta_w_wq <- meta_w_toxins %>%
+  left_join(ctd_and_wq_for_join)
+
+meta_w_wq %>%
+  filter(Station_ID == "78")
+
+```
+
+```{r}
+
+meta_physeq <- tree_prok_physeq
+
+meta_physeq@sam_data <- NULL
+
+row.names(meta_w_wq) <- meta_w_wq$DNA_ID
+
+meta_physeq <- merge_phyloseq(meta_physeq, sample_data(meta_w_wq))
+
+
+```
+
+
+
+
+```{r export-metadata}
+
+save(sample_info, file = "data/05_Metadata_Curation/sample_info.RData")
+
+save(meta_physeq, file = "data/05_Metadata_Curation/meta_physeq.RData")
+```
+
+
+```{r}
+# Reproducibility
+devtools::session_info()
+```
+

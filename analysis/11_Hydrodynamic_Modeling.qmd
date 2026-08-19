@@ -1,0 +1,1702 @@
+---
+title: "Current Modeling" 
+author: "Augustus Pendleton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+knitr: 
+  opts_chunk: 
+    fig.path: ..1figures/10_Hydrodynamics/
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r august_pre}
+# Mark Rowe April 20, 2026
+# mark.rowe@noaa.gov
+# R script for Map figure of LEOFS temperature and currents
+# the user should review, check, and understand the plotting script to 
+# verify that it is free from errors and suitable for the intended purpose
+
+def.par <- par(no.readonly = TRUE) # save default, for resetting...
+require(PBSmapping)
+require(fields)
+require(ncdf4)
+
+topDir<- "data/11_Hydrodynamic_Modeling/" 
+rpath <- topDir 
+plotpath<- topDir 
+
+source(paste0(rpath,"proj_functions.R")) # project coordinates between lat lon and projected coordinates (meters or km)
+source(paste0(rpath,"image_scale.R")) # add a color scale to a plot
+load(paste0(rpath,"erie05lcc_grid_polys.Rdata"))
+load(paste0(rpath,"erie05lcc_grid_coords.Rdata"))
+coordsn$X <- coordsn$X/1000
+coordsn$Y <- coordsn$Y/1000
+coordse$X <- coordse$X/1000
+coordse$Y <- coordse$Y/1000
+load(paste0(rpath,"mask2.Rdata"))
+
+##############################################
+# load info for FVCOM temperature, currents
+###############################################
+fvcomDir <- paste0(topDir,"august/")
+
+#4-20-26 downloaded leofs output from
+#https://www.ncei.noaa.gov/data/operational-nowcast-and-forecast-hydrodynamic-model-systems-co-ops/access/lake-erie-operational-forecast-system-leofs/2024/08/
+
+
+mifns <- Sys.glob(paste0(fvcomDir,"nos.leofs*.nc"))
+nfiles <- length(mifns)
+xlimLL <- c(-83.47336, -78.8) 
+ylimLL <- c(41.36373, 43) 
+lims <- projLcc(data.frame(lon=xlimLL, lat=ylimLL) , prj_new)
+xlim <- lims$X
+ylim <- lims$Y
+
+plotPolys(shoreline)
+plotPolys(shoreline, xlim=xlim, ylim=ylim, projection = TRUE)
+
+nutNames <- c("temp", "u", "v")
+nutLabs <- list( 
+  expression(paste("Temperature, ",degree,"C"))
+  ,expression(paste("u velocity, ",m,"/s"))
+  ,expression(paste("v velocity, ",m,"/s"))
+)
+getFVCOM <- function(xlim, ylim, periods, year){
+  # plotPolys(shorelineLL, xlim=xlimLL, ylim=ylimLL)
+  # plotPolys(shoreline, xlim=xlim, ylim=ylim, projection=TRUE)
+  
+  print(paste(xlim,ylim))
+  
+  ro1 <-  which(coordsn$X > min(xlim)-2 & coordsn$X < max(xlim)+2 & coordsn$Y > min(ylim)-2 & coordsn$Y < max(ylim)+2)
+  nodes <- coordsn$node[ro1]
+  bbnodes <- coordsn[ro1,]
+  nnodes <- length(nodes)
+  
+  # # find the element closest to each node for getting the velocities
+  bbeles <- c()
+  bbeles1 <- coordse[which(coordse$X <= max(xlim)+2 & coordse$X >= min(xlim)-2 & coordse$Y <= max(ylim)+2 & coordse$Y >= min(ylim)-2),]
+  for(i in 1:nrow(bbnodes)){
+    dist <- sqrt((bbeles1$X - bbnodes$X[i])^2 + (bbeles1$Y - bbnodes$Y[i] )^2)
+    xx2 <- which(dist==min(dist))[1]
+    bbeles <- c(bbeles,bbeles1$node[xx2])
+  }
+  
+  nutis <- 1:length(nutNames)
+  nutDims <- rep(3,length(nutNames))
+  scales <- rep(1,length(nutNames))
+  
+  plist <- list()
+  pei=1
+
+    length_periods <- length(periods)
+
+  for(pei in 1:length(periods)){
+
+      fileNos <- 1:nfiles
+
+ 
+    # get the model values
+    first <- 1
+    #loop through the files
+    fileNo <- 1
+    # for(fileNo in 1:nfiles){
+    for(fileNo in fileNos){
+      
+      fn1 <- mifns[fileNo]
+
+      if(file.exists(fn1)){
+        nc <- nc_open(fn1, readunlim=F)
+        print(paste("file opened",fn1))
+      }else{
+        print(paste("file not found",fn1))
+        break
+      }
+      
+      time2 <- ncvar_get(nc, "Times", start=c(1,1), count=c(-1,-1))
+      time2 <- as.POSIXct(time2, format="%Y-%m-%dT%H:%M:%S", tz="UTC")
+      ntime <- length(time2)
+      
+      if(ntime>0){
+        if(first==1){
+          time1 <- as.POSIXct(time2, tz="UTC")
+          # # find the record corresponding to the hour of the transect
+          # timi <- which(time1 == date1)
+          
+          siglay <- ncvar_get(nc, "siglay", start=c(1,1), count=c(1,-1))
+          siglev <- ncvar_get(nc, "siglev", start=c(1,1), count=c(1,-1))
+          nlay <- 1 # length(siglay)
+          h <- ncvar_get(nc, "h", start=c(1), count=c(-1))
+          
+        }else{
+          #  time1 <- c(time1, time2)
+          time1 <- rbind(data.frame(x=time1),data.frame(x=time2))[[1]]
+        }
+        
+        #      timeNos <- seq(1,ntime,stride)
+
+          timeNos <- which(time2 >= dateRange[1] & time2 <= dateRange[2])
+        if(length(timeNos) < 1 ){
+          print("time out of dateRange")
+          next
+          } # go to next file
+
+        ntime2 <- length(timeNos)
+        if(first == 1){
+          plotTimes <- time2[timeNos]
+        }else{
+          #plotTimes <- c(plotTimes, time2[timeNos])
+          plotTimes <- rbind(data.frame(x=plotTimes),data.frame(x=time2[timeNos]))[[1]]
+        }
+        
+        # set up empty arrays to hold the data from this nc file
+        list1 <- list()
+        nuti <- 1
+        for(nuti in 1:length(nutis)){
+          nutNo <- nutis[nuti]
+          nutName <- nutNames[nutNo]
+          nutDim <- nutDims[nutNo]
+          if(nutDim ==3){
+            array1 <- array(NA, dim=c(nnodes, nlay , ntime2))
+          }else{
+            array1 <- array(NA, dim=c(nnodes, 1, ntime2))
+          }
+          list1[[nuti]] <- array1
+        } # end nuti, set up arrays
+        
+        nuti <- 1
+        for(nuti in 1:length(nutis)){
+          nutNo <- nutis[nuti]
+          nutName <- nutNames[nutNo]
+          
+          #  print(paste("fileNo=",fileNo,nutName,"nnodes=",nnodes))
+          
+          timi <- 1
+          for(timi in 1:ntime2){
+            timeNo <- timeNos[timi]
+            #  print(paste("fileNo= ",fileNo,time2[timeNo]))
+            
+            nodei = 1
+            #for(nodei in 1:length(nodes)){
+            m <- nodes[nodei]
+            nutDim <- nutDims[nutNo]
+            if(nutDim ==3){
+              if(nutName == "Chl"){
+                # values1 <- ncvar_get(nc, "THETACHL1", start=c(1,1,timeNo), count=c(-1,1,1))[nodes]
+                # values2 <- ncvar_get(nc, "Phytoplankton", start=c(1,1,timeNo), count=c(-1,1,1))[nodes]
+                # values <- values1*values2
+              }else if(nutName %in% c("u","v")){
+                n <- bbeles[nodei]
+                # values <- ncvar_get(nc, nutName, start=c(1,1,1), count=c(-1,-1,-1))[bbeles,,]  
+                values <- ncvar_get(nc, nutName, start=c(1,1,timi), count=c(-1,1,1))[bbeles]  # surface only
+                #values <- apply(values, MARGIN=c(1), FUN=mean)
+              }else if(nutName =="btemp"){
+                # values <- ncvar_get(nc, nutName, start=c(1,1,1), count=c(-1,-1,-1))[nodes,,]
+                values <- ncvar_get(nc, "temp", start=c(1,20,timi), count=c(-1,1,1))[nodes] # bottom only
+                #values <- apply(values, MARGIN=c(1), FUN=mean)
+              }else{
+                # values <- ncvar_get(nc, nutName, start=c(1,1,1), count=c(-1,-1,-1))[nodes,,]
+                values <- ncvar_get(nc, nutName, start=c(1,1,timi), count=c(-1,1,1))[nodes] # surface only
+                #values <- apply(values, MARGIN=c(1), FUN=mean)
+              }
+              dim2 <- nlay
+            }else{
+              # values <- ncvar_get(nc, nutName, start=c(1,timeNo), count=c(-1,1))[nodes]
+              # dim2 <- 1
+            }
+            array1 <- list1[[nuti]]
+            # array1[nodei,,timi] <- values
+            array1[,,timi] <- values
+            list1[[nuti]] <- array1
+            
+            #  } #end nodei
+          } # end timi
+        } # end nuti
+        
+        # paste together the arrays from the time block in each ncdf file
+        if(first==1){
+          first <- 0
+          list2 <- list1
+        }else{
+          for(nuti in 1:length(nutis)){
+            nutNo <- nutis[nuti]
+            nutDim <- nutDims[nutNo]
+            if(nutDim ==3){
+              dim2 <- nlay
+            }else{
+              dim2 <- 1
+            }
+            array2 <- list2[[nuti]]
+            dim32 <- dim(array2)[3]
+            array1 <- list1[[nuti]]
+            dim31 <- dim(array1)[3]
+            array3 <- array(NA, dim=c(nnodes, dim2, dim32+dim31))
+            array3[,,1:dim32] <- array2
+            ind1 <- dim32+1
+            ind2 <- dim32+dim31
+            array3[,,ind1:ind2] <- array1
+            list2[[nuti]] <- array3
+            rm(array3)
+          } # end nuti
+          
+        } #if(fileNo==1){
+        
+      } # end if ntime>1
+      #nc_close( nc )
+    } # end fileNo loop
+    
+    plist[[pei]] <- list(list2=list2, time1=time1, plotTimes=plotTimes, nodes=nodes)
+    return(plist)
+    
+  } # end pei
+  
+}
+
+getInterp <- function(values, plotres=0.5, xlim, ylim){
+  require(akima)
+  #plotres <- 0.5 #  0.02 # 0.05 # 0.2 resolution of interpolation grid, km
+  xlength <- (xlim[2]-xlim[1])/plotres
+  ylength <- (ylim[2]-ylim[1])/plotres
+  xx <- nodes # 1:nrow(coordsn) #which(coordsn$X <= xlim[2] & coordsn$X >= xlim[1] & coordsn$Y <= ylim[2] & coordsn$Y >= ylim[1])
+  x=coordsn$X[xx]
+  y=coordsn$Y[xx]
+  z=values #values[xx]
+  data.interp <- interp(x,y,z, duplicate="mean"
+                        ,xo=seq(min(x), max(x), length = xlength)
+                        ,yo=seq(min(y), max(y), length = ylength)
+                        , extrap=FALSE
+                        , linear=TRUE
+  )
+  return(data.interp)
+}
+
+
+
+## loop through the three periods to plot  ###########################
+nutNames <- c("temp", "u", "v")
+ploti = 1 
+
+# loop could be modified to plot multiple time periods
+for(ploti in 1:1){
+  
+  # CJFAS figure dimensions
+  #Supply figures sized for publication: 1-column width is 8.84 cm, 2-column is 18.2 cm with a max. height of 23.7 cm and a resolution of 300 dpi
+  par(def.par)
+  if(ploti==1){
+    fn1 <- paste0(plotpath, "august_pre.pdf")
+  }
+
+
+  width=18.2/2.54
+  pdf(file=fn1, width=width, height=width*0.85, pointsize=10)
+  
+  n<-layout(matrix(c(1,2), 1, 2, byrow = TRUE), widths=c(1,0.25))
+  #layout.show(n)
+  
+  if(ploti==1){
+    #August 2-9
+    dateRange <- c(as.POSIXct("2024-08-02 01:00:00 UTC", tz="UTC"),  as.POSIXct("2024-08-08 23:00:00 UTC", tz="UTC")) 
+    
+  }
+  
+
+  # adjust map area within plot area
+  pltMap2 <- c(0.1,0.98,0.08,0.99)
+  
+  # get FVCOM data
+   periods <- list(
+     seq(as.numeric(format(dateRange[1], "%j")),as.numeric(format(dateRange[2], "%j")))
+   )
+   plist <- getFVCOM(xlim=xlim, ylim=ylim, periods=periods, year=format(dateRange[1], "%Y"))
+
+  list2 <- plist[[1]]$list2
+  nodes <- plist[[1]]$nodes
+  
+
+  # map view of currents and temperature
+  plotPolys(shoreline, col="white", border="black", lwd=0.5, projection=TRUE   #col="lightblue"
+            ,plt=pltMap2
+            ,xlab="Easting, km", ylab="Northing, km", cex.axis=1.0, cex.lab=1.0, tck=-0.014
+            ,xlim=xlim ,ylim=ylim
+  )
+
+  range(plist[[1]]$plotTimes)
+  
+  # interpolate model data
+  temp1 <- list2[[which(nutNames=="temp")]] # model data to plot
+  values <- apply(temp1, MARGIN=c(1), FUN=mean)
+  plotres=0.5
+  data.interp <- getInterp(values, plotres=plotres, xlim=xlim, ylim=ylim)
+  
+  colorbarlab <- nutLabs[[1]]
+  
+  # set colors and breaks for color bar, and make image plots
+  nlevel <- 256
+  colorbar <- tim.colors(nlevel) # tim.colors(256)
+  zlim <- c(10,30 )
+  
+  cols <- colorbar
+  graphics::image(data.interp, zlim=zlim, col=cols, add=TRUE
+                  # , xaxt="n"
+                  , yaxt="n"
+                  ,ylim=ylim
+                  ,xlim=xlim
+                  ,xlab=""
+  )
+  
+  # plot image again, slightly shifted, to eliminate aliasing artifacts in image rendering
+  data.interp2 <- data.interp
+  data.interp2$y <- data.interp$y + plotres/2
+  data.interp2$x <- data.interp$x + plotres/2
+  graphics::image(data.interp2, zlim=zlim, col=cols, add=TRUE
+                  # , xaxt="n"
+                  , yaxt="n"
+                  ,ylim=ylim
+                  ,xlim=xlim
+                  ,xlab=""
+  )
+  
+  #contour(data.interp, add=TRUE, levels=seq(2,30,2))
+  #  contour(data.interp, add=TRUE, levels=c(seq(0,6),seq(8,30,2)))
+  
+  addPolys(mask2, col="tan", border="black")
+  #legend("topleft",legend="b",bty="n")
+  
+  uscale <- abs(xlim[2]-xlim[1])/3.5 # scale so that uprime arrow is 1/10 of x axis range for 1 m/s velocity
+
+  # interpolate velocities to regular grid
+  # use a small value of plotres, then sample from the results with skip
+  # to get arrows right up to the shoreline
+  plotresv=0.5
+  u <- list2[[which(nutNames=="u")]][,1, ]
+  values <- apply(u, MARGIN=c(1), FUN=mean)
+  ui <- getInterp(values, plotres=plotresv, xlim=xlim, ylim=ylim)
+  v <- list2[[which(nutNames=="v")]][,1, ]
+  values <- apply(v, MARGIN=c(1), FUN=mean)
+  vi <- getInterp(values, plotres=plotresv, xlim=xlim, ylim=ylim)
+  
+  x0 <- c() # ui$x
+  y0 <- c() # ui$y
+  x1 <- c()
+  y1 <- c()
+  # rearrange into vectors for arrows()
+  skip=4
+  # current vectors will be plotted along north-south or east-west lines
+  # change "skip" to modify spacing along the lines
+  # multiply "skip" by a factor in i or j to modify spacing between lines
+  # or make lines go north-south or east-west
+  for(i in seq(1,length(ui$x),by=skip*5)){
+    for(j in seq(1,length(ui$y),by=skip)){
+      x0 <- c(x0, ui$x[i])
+      y0 <- c(y0, ui$y[j])
+      x1 <- c(x1, ui$z[i,j]*uscale)
+      y1 <- c(y1, vi$z[i,j]*uscale)
+    }
+  }
+  # select locations within the shoreline
+  events <- data.frame(EID=1:length(x0), X=x0, Y=y0)
+  fp <- findPolys (events=events, polys=shoreline )
+  arrows(x0=x0[fp$EID], y0=y0[fp$EID], x1=x0[fp$EID]+x1[fp$EID], y1=y0[fp$EID]+y1[fp$EID], length = 0.03, angle = 30, col="black")
+  
+ 
+  # plot a scale arrow for velocity arrows
+  x0 <- grconvertX(0.85, from="npc")
+  y0 <- grconvertY(0.07, from="npc")
+  arrows(x0=x0, y0=y0, x1=x0+0.05*uscale, y1=y0, length = 0.03, angle = 30)
+  y0 <- grconvertY(0.05, from="npc")
+  text(x0-10, y0, expression(paste("0.125 ",m," ",s^{-1})), pos=4)
+
+  # box(which="plot", col="red")
+  # box(which="figure", col="orange")
+  # box(which="inner", col="yellow")
+  # box(which="outer", col="blue")
+  
+  x0 <- grconvertX(0.1, from="npc")
+  y0 <- grconvertY(0.90, from="npc")
+  text(x0, y0, paste(dateRange, collapse = " - "), pos=4)
+  
+  # plot the scale bar 
+  par(mar=c(8, 2.1, 5, 3.2) )
+  image.scale(zlim=zlim, col=colorbar, axis.pos=4)
+  mtext(colorbarlab,side=2,line=0.3, cex=0.7)
+  
+  par(def.par)
+  graphics.off()
+  
+  }# end ploti
+  #############################
+  
+
+
+
+
+```
+
+```{r august_during}
+# Mark Rowe April 20, 2026
+# mark.rowe@noaa.gov
+# R script for Map figure of LEOFS temperature and currents
+# the user should review, check, and understand the plotting script to 
+# verify that it is free from errors and suitable for the intended purpose
+
+def.par <- par(no.readonly = TRUE) # save default, for resetting...
+require(PBSmapping)
+require(fields)
+require(ncdf4)
+
+topDir<- "data/11_Hydrodynamic_Modeling/" 
+rpath <- topDir 
+plotpath<- topDir 
+
+source(paste0(rpath,"proj_functions.R")) # project coordinates between lat lon and projected coordinates (meters or km)
+source(paste0(rpath,"image_scale.R")) # add a color scale to a plot
+load(paste0(rpath,"erie05lcc_grid_polys.Rdata"))
+load(paste0(rpath,"erie05lcc_grid_coords.Rdata"))
+coordsn$X <- coordsn$X/1000
+coordsn$Y <- coordsn$Y/1000
+coordse$X <- coordse$X/1000
+coordse$Y <- coordse$Y/1000
+load(paste0(rpath,"mask2.Rdata"))
+
+##############################################
+# load info for FVCOM temperature, currents
+###############################################
+fvcomDir <- paste0(topDir,"august/")
+
+#4-20-26 downloaded leofs output from
+#https://www.ncei.noaa.gov/data/operational-nowcast-and-forecast-hydrodynamic-model-systems-co-ops/access/lake-erie-operational-forecast-system-leofs/2024/08/
+
+
+mifns <- Sys.glob(paste0(fvcomDir,"nos.leofs*.nc"))
+nfiles <- length(mifns)
+xlimLL <- c(-83.47336, -78.8) 
+ylimLL <- c(41.36373, 43) 
+lims <- projLcc(data.frame(lon=xlimLL, lat=ylimLL) , prj_new)
+xlim <- lims$X
+ylim <- lims$Y
+
+plotPolys(shoreline)
+plotPolys(shoreline, xlim=xlim, ylim=ylim, projection = TRUE)
+
+nutNames <- c("temp", "u", "v")
+nutLabs <- list( 
+  expression(paste("Temperature, ",degree,"C"))
+  ,expression(paste("u velocity, ",m,"/s"))
+  ,expression(paste("v velocity, ",m,"/s"))
+)
+getFVCOM <- function(xlim, ylim, periods, year){
+  # plotPolys(shorelineLL, xlim=xlimLL, ylim=ylimLL)
+  # plotPolys(shoreline, xlim=xlim, ylim=ylim, projection=TRUE)
+  
+  print(paste(xlim,ylim))
+  
+  ro1 <-  which(coordsn$X > min(xlim)-2 & coordsn$X < max(xlim)+2 & coordsn$Y > min(ylim)-2 & coordsn$Y < max(ylim)+2)
+  nodes <- coordsn$node[ro1]
+  bbnodes <- coordsn[ro1,]
+  nnodes <- length(nodes)
+  
+  # # find the element closest to each node for getting the velocities
+  bbeles <- c()
+  bbeles1 <- coordse[which(coordse$X <= max(xlim)+2 & coordse$X >= min(xlim)-2 & coordse$Y <= max(ylim)+2 & coordse$Y >= min(ylim)-2),]
+  for(i in 1:nrow(bbnodes)){
+    dist <- sqrt((bbeles1$X - bbnodes$X[i])^2 + (bbeles1$Y - bbnodes$Y[i] )^2)
+    xx2 <- which(dist==min(dist))[1]
+    bbeles <- c(bbeles,bbeles1$node[xx2])
+  }
+  
+  nutis <- 1:length(nutNames)
+  nutDims <- rep(3,length(nutNames))
+  scales <- rep(1,length(nutNames))
+  
+  plist <- list()
+  pei=1
+
+    length_periods <- length(periods)
+
+  for(pei in 1:length(periods)){
+
+      fileNos <- 1:nfiles
+
+ 
+    # get the model values
+    first <- 1
+    #loop through the files
+    fileNo <- 1
+    # for(fileNo in 1:nfiles){
+    for(fileNo in fileNos){
+      
+      fn1 <- mifns[fileNo]
+
+      if(file.exists(fn1)){
+        nc <- nc_open(fn1, readunlim=F)
+        print(paste("file opened",fn1))
+      }else{
+        print(paste("file not found",fn1))
+        break
+      }
+      
+      time2 <- ncvar_get(nc, "Times", start=c(1,1), count=c(-1,-1))
+      time2 <- as.POSIXct(time2, format="%Y-%m-%dT%H:%M:%S", tz="UTC")
+      ntime <- length(time2)
+      
+      if(ntime>0){
+        if(first==1){
+          time1 <- as.POSIXct(time2, tz="UTC")
+          # # find the record corresponding to the hour of the transect
+          # timi <- which(time1 == date1)
+          
+          siglay <- ncvar_get(nc, "siglay", start=c(1,1), count=c(1,-1))
+          siglev <- ncvar_get(nc, "siglev", start=c(1,1), count=c(1,-1))
+          nlay <- 1 # length(siglay)
+          h <- ncvar_get(nc, "h", start=c(1), count=c(-1))
+          
+        }else{
+          #  time1 <- c(time1, time2)
+          time1 <- rbind(data.frame(x=time1),data.frame(x=time2))[[1]]
+        }
+        
+        #      timeNos <- seq(1,ntime,stride)
+
+          timeNos <- which(time2 >= dateRange[1] & time2 <= dateRange[2])
+        if(length(timeNos) < 1 ){
+          print("time out of dateRange")
+          next
+          } # go to next file
+
+        ntime2 <- length(timeNos)
+        if(first == 1){
+          plotTimes <- time2[timeNos]
+        }else{
+          #plotTimes <- c(plotTimes, time2[timeNos])
+          plotTimes <- rbind(data.frame(x=plotTimes),data.frame(x=time2[timeNos]))[[1]]
+        }
+        
+        # set up empty arrays to hold the data from this nc file
+        list1 <- list()
+        nuti <- 1
+        for(nuti in 1:length(nutis)){
+          nutNo <- nutis[nuti]
+          nutName <- nutNames[nutNo]
+          nutDim <- nutDims[nutNo]
+          if(nutDim ==3){
+            array1 <- array(NA, dim=c(nnodes, nlay , ntime2))
+          }else{
+            array1 <- array(NA, dim=c(nnodes, 1, ntime2))
+          }
+          list1[[nuti]] <- array1
+        } # end nuti, set up arrays
+        
+        nuti <- 1
+        for(nuti in 1:length(nutis)){
+          nutNo <- nutis[nuti]
+          nutName <- nutNames[nutNo]
+          
+          #  print(paste("fileNo=",fileNo,nutName,"nnodes=",nnodes))
+          
+          timi <- 1
+          for(timi in 1:ntime2){
+            timeNo <- timeNos[timi]
+            #  print(paste("fileNo= ",fileNo,time2[timeNo]))
+            
+            nodei = 1
+            #for(nodei in 1:length(nodes)){
+            m <- nodes[nodei]
+            nutDim <- nutDims[nutNo]
+            if(nutDim ==3){
+              if(nutName == "Chl"){
+                # values1 <- ncvar_get(nc, "THETACHL1", start=c(1,1,timeNo), count=c(-1,1,1))[nodes]
+                # values2 <- ncvar_get(nc, "Phytoplankton", start=c(1,1,timeNo), count=c(-1,1,1))[nodes]
+                # values <- values1*values2
+              }else if(nutName %in% c("u","v")){
+                n <- bbeles[nodei]
+                # values <- ncvar_get(nc, nutName, start=c(1,1,1), count=c(-1,-1,-1))[bbeles,,]  
+                values <- ncvar_get(nc, nutName, start=c(1,1,timi), count=c(-1,1,1))[bbeles]  # surface only
+                #values <- apply(values, MARGIN=c(1), FUN=mean)
+              }else if(nutName =="btemp"){
+                # values <- ncvar_get(nc, nutName, start=c(1,1,1), count=c(-1,-1,-1))[nodes,,]
+                values <- ncvar_get(nc, "temp", start=c(1,20,timi), count=c(-1,1,1))[nodes] # bottom only
+                #values <- apply(values, MARGIN=c(1), FUN=mean)
+              }else{
+                # values <- ncvar_get(nc, nutName, start=c(1,1,1), count=c(-1,-1,-1))[nodes,,]
+                values <- ncvar_get(nc, nutName, start=c(1,1,timi), count=c(-1,1,1))[nodes] # surface only
+                #values <- apply(values, MARGIN=c(1), FUN=mean)
+              }
+              dim2 <- nlay
+            }else{
+              # values <- ncvar_get(nc, nutName, start=c(1,timeNo), count=c(-1,1))[nodes]
+              # dim2 <- 1
+            }
+            array1 <- list1[[nuti]]
+            # array1[nodei,,timi] <- values
+            array1[,,timi] <- values
+            list1[[nuti]] <- array1
+            
+            #  } #end nodei
+          } # end timi
+        } # end nuti
+        
+        # paste together the arrays from the time block in each ncdf file
+        if(first==1){
+          first <- 0
+          list2 <- list1
+        }else{
+          for(nuti in 1:length(nutis)){
+            nutNo <- nutis[nuti]
+            nutDim <- nutDims[nutNo]
+            if(nutDim ==3){
+              dim2 <- nlay
+            }else{
+              dim2 <- 1
+            }
+            array2 <- list2[[nuti]]
+            dim32 <- dim(array2)[3]
+            array1 <- list1[[nuti]]
+            dim31 <- dim(array1)[3]
+            array3 <- array(NA, dim=c(nnodes, dim2, dim32+dim31))
+            array3[,,1:dim32] <- array2
+            ind1 <- dim32+1
+            ind2 <- dim32+dim31
+            array3[,,ind1:ind2] <- array1
+            list2[[nuti]] <- array3
+            rm(array3)
+          } # end nuti
+          
+        } #if(fileNo==1){
+        
+      } # end if ntime>1
+      #nc_close( nc )
+    } # end fileNo loop
+    
+    plist[[pei]] <- list(list2=list2, time1=time1, plotTimes=plotTimes, nodes=nodes)
+    return(plist)
+    
+  } # end pei
+  
+}
+
+getInterp <- function(values, plotres=0.5, xlim, ylim){
+  require(akima)
+  #plotres <- 0.5 #  0.02 # 0.05 # 0.2 resolution of interpolation grid, km
+  xlength <- (xlim[2]-xlim[1])/plotres
+  ylength <- (ylim[2]-ylim[1])/plotres
+  xx <- nodes # 1:nrow(coordsn) #which(coordsn$X <= xlim[2] & coordsn$X >= xlim[1] & coordsn$Y <= ylim[2] & coordsn$Y >= ylim[1])
+  x=coordsn$X[xx]
+  y=coordsn$Y[xx]
+  z=values #values[xx]
+  data.interp <- interp(x,y,z, duplicate="mean"
+                        ,xo=seq(min(x), max(x), length = xlength)
+                        ,yo=seq(min(y), max(y), length = ylength)
+                        , extrap=FALSE
+                        , linear=TRUE
+  )
+  return(data.interp)
+}
+
+
+
+## loop through the three periods to plot  ###########################
+nutNames <- c("temp", "u", "v")
+ploti = 1 
+
+# loop could be modified to plot multiple time periods
+for(ploti in 1:1){
+  
+  # CJFAS figure dimensions
+  #Supply figures sized for publication: 1-column width is 8.84 cm, 2-column is 18.2 cm with a max. height of 23.7 cm and a resolution of 300 dpi
+  par(def.par)
+  if(ploti==1){
+    fn1 <- paste0(plotpath, "august_during.pdf")
+  }
+
+
+  width=18.2/2.54
+  pdf(file=fn1, width=width, height=width*0.85, pointsize=10)
+  
+  n<-layout(matrix(c(1,2), 1, 2, byrow = TRUE), widths=c(1,0.25))
+  #layout.show(n)
+  
+  if(ploti==1){
+    #August 2-9
+    dateRange <- c(as.POSIXct("2024-08-09 00:00:00 UTC", tz="UTC"),  as.POSIXct("2024-08-15 00:00:00 UTC", tz="UTC")) 
+    
+  }
+  
+
+  # adjust map area within plot area
+  pltMap2 <- c(0.1,0.98,0.08,0.99)
+  
+  # get FVCOM data
+   periods <- list(
+     seq(as.numeric(format(dateRange[1], "%j")),as.numeric(format(dateRange[2], "%j")))
+   )
+   plist <- getFVCOM(xlim=xlim, ylim=ylim, periods=periods, year=format(dateRange[1], "%Y"))
+
+  list2 <- plist[[1]]$list2
+  nodes <- plist[[1]]$nodes
+  
+
+  # map view of currents and temperature
+  plotPolys(shoreline, col="white", border="black", lwd=0.5, projection=TRUE   #col="lightblue"
+            ,plt=pltMap2
+            ,xlab="Easting, km", ylab="Northing, km", cex.axis=1.0, cex.lab=1.0, tck=-0.014
+            ,xlim=xlim ,ylim=ylim
+  )
+
+  range(plist[[1]]$plotTimes)
+  
+  # interpolate model data
+  temp1 <- list2[[which(nutNames=="temp")]] # model data to plot
+  values <- apply(temp1, MARGIN=c(1), FUN=mean)
+  plotres=0.5
+  data.interp <- getInterp(values, plotres=plotres, xlim=xlim, ylim=ylim)
+  
+  colorbarlab <- nutLabs[[1]]
+  
+  # set colors and breaks for color bar, and make image plots
+  nlevel <- 256
+  colorbar <- tim.colors(nlevel) # tim.colors(256)
+  zlim <- c(10,30 )
+  
+  cols <- colorbar
+  graphics::image(data.interp, zlim=zlim, col=cols, add=TRUE
+                  # , xaxt="n"
+                  , yaxt="n"
+                  ,ylim=ylim
+                  ,xlim=xlim
+                  ,xlab=""
+  )
+  
+  # plot image again, slightly shifted, to eliminate aliasing artifacts in image rendering
+  data.interp2 <- data.interp
+  data.interp2$y <- data.interp$y + plotres/2
+  data.interp2$x <- data.interp$x + plotres/2
+  graphics::image(data.interp2, zlim=zlim, col=cols, add=TRUE
+                  # , xaxt="n"
+                  , yaxt="n"
+                  ,ylim=ylim
+                  ,xlim=xlim
+                  ,xlab=""
+  )
+  
+  #contour(data.interp, add=TRUE, levels=seq(2,30,2))
+  #  contour(data.interp, add=TRUE, levels=c(seq(0,6),seq(8,30,2)))
+  
+  addPolys(mask2, col="tan", border="black")
+  #legend("topleft",legend="b",bty="n")
+  
+  uscale <- abs(xlim[2]-xlim[1])/3.5 # scale so that uprime arrow is 1/10 of x axis range for 1 m/s velocity
+
+  # interpolate velocities to regular grid
+  # use a small value of plotres, then sample from the results with skip
+  # to get arrows right up to the shoreline
+  plotresv=0.5
+  u <- list2[[which(nutNames=="u")]][,1, ]
+  values <- apply(u, MARGIN=c(1), FUN=mean)
+  ui <- getInterp(values, plotres=plotresv, xlim=xlim, ylim=ylim)
+  v <- list2[[which(nutNames=="v")]][,1, ]
+  values <- apply(v, MARGIN=c(1), FUN=mean)
+  vi <- getInterp(values, plotres=plotresv, xlim=xlim, ylim=ylim)
+  
+  x0 <- c() # ui$x
+  y0 <- c() # ui$y
+  x1 <- c()
+  y1 <- c()
+  # rearrange into vectors for arrows()
+  skip=4
+  # current vectors will be plotted along north-south or east-west lines
+  # change "skip" to modify spacing along the lines
+  # multiply "skip" by a factor in i or j to modify spacing between lines
+  # or make lines go north-south or east-west
+  for(i in seq(1,length(ui$x),by=skip*5)){
+    for(j in seq(1,length(ui$y),by=skip)){
+      x0 <- c(x0, ui$x[i])
+      y0 <- c(y0, ui$y[j])
+      x1 <- c(x1, ui$z[i,j]*uscale)
+      y1 <- c(y1, vi$z[i,j]*uscale)
+    }
+  }
+  # select locations within the shoreline
+  events <- data.frame(EID=1:length(x0), X=x0, Y=y0)
+  fp <- findPolys (events=events, polys=shoreline )
+  arrows(x0=x0[fp$EID], y0=y0[fp$EID], x1=x0[fp$EID]+x1[fp$EID], y1=y0[fp$EID]+y1[fp$EID], length = 0.03, angle = 30, col="black")
+  
+ 
+  # plot a scale arrow for velocity arrows
+  x0 <- grconvertX(0.85, from="npc")
+  y0 <- grconvertY(0.07, from="npc")
+  arrows(x0=x0, y0=y0, x1=x0+0.05*uscale, y1=y0, length = 0.03, angle = 30)
+  y0 <- grconvertY(0.05, from="npc")
+  text(x0-10, y0, expression(paste("0.125 ",m," ",s^{-1})), pos=4)
+
+  # box(which="plot", col="red")
+  # box(which="figure", col="orange")
+  # box(which="inner", col="yellow")
+  # box(which="outer", col="blue")
+  
+  x0 <- grconvertX(0.1, from="npc")
+  y0 <- grconvertY(0.90, from="npc")
+  text(x0, y0, paste(dateRange, collapse = " - "), pos=4)
+  
+  # plot the scale bar 
+  par(mar=c(8, 2.1, 5, 3.2) )
+  image.scale(zlim=zlim, col=colorbar, axis.pos=4)
+  mtext(colorbarlab,side=2,line=0.3, cex=0.7)
+  
+  par(def.par)
+  graphics.off()
+  
+  }# end ploti
+  #############################
+  
+
+
+
+
+```
+
+```{r sept_pre}
+# Mark Rowe April 20, 2026
+# mark.rowe@noaa.gov
+# R script for Map figure of LEOFS temperature and currents
+# the user should review, check, and understand the plotting script to 
+# verify that it is free from errors and suitable for the intended purpose
+
+def.par <- par(no.readonly = TRUE) # save default, for resetting...
+require(PBSmapping)
+require(fields)
+require(ncdf4)
+
+topDir<- "data/11_Hydrodynamic_Modeling/" 
+rpath <- topDir 
+plotpath<- topDir 
+
+source(paste0(rpath,"proj_functions.R")) # project coordinates between lat lon and projected coordinates (meters or km)
+source(paste0(rpath,"image_scale.R")) # add a color scale to a plot
+load(paste0(rpath,"erie05lcc_grid_polys.Rdata"))
+load(paste0(rpath,"erie05lcc_grid_coords.Rdata"))
+coordsn$X <- coordsn$X/1000
+coordsn$Y <- coordsn$Y/1000
+coordse$X <- coordse$X/1000
+coordse$Y <- coordse$Y/1000
+load(paste0(rpath,"mask2.Rdata"))
+
+##############################################
+# load info for FVCOM temperature, currents
+###############################################
+fvcomDir <- paste0(topDir,"september/")
+
+#4-20-26 downloaded leofs output from
+#https://www.ncei.noaa.gov/data/operational-nowcast-and-forecast-hydrodynamic-model-systems-co-ops/access/lake-erie-operational-forecast-system-leofs/2024/08/
+
+
+mifns <- Sys.glob(paste0(fvcomDir,"*.nc"))
+nfiles <- length(mifns)
+xlimLL <- c(-83.47336, -78.8) 
+ylimLL <- c(41.36373, 43) 
+lims <- projLcc(data.frame(lon=xlimLL, lat=ylimLL) , prj_new)
+xlim <- lims$X
+ylim <- lims$Y
+
+plotPolys(shoreline)
+plotPolys(shoreline, xlim=xlim, ylim=ylim, projection = TRUE)
+
+nutNames <- c("temp", "u", "v")
+nutLabs <- list( 
+  expression(paste("Temperature, ",degree,"C"))
+  ,expression(paste("u velocity, ",m,"/s"))
+  ,expression(paste("v velocity, ",m,"/s"))
+)
+getFVCOM <- function(xlim, ylim, periods, year){
+  # plotPolys(shorelineLL, xlim=xlimLL, ylim=ylimLL)
+  # plotPolys(shoreline, xlim=xlim, ylim=ylim, projection=TRUE)
+  
+  print(paste(xlim,ylim))
+  
+  ro1 <-  which(coordsn$X > min(xlim)-2 & coordsn$X < max(xlim)+2 & coordsn$Y > min(ylim)-2 & coordsn$Y < max(ylim)+2)
+  nodes <- coordsn$node[ro1]
+  bbnodes <- coordsn[ro1,]
+  nnodes <- length(nodes)
+  
+  # # find the element closest to each node for getting the velocities
+  bbeles <- c()
+  bbeles1 <- coordse[which(coordse$X <= max(xlim)+2 & coordse$X >= min(xlim)-2 & coordse$Y <= max(ylim)+2 & coordse$Y >= min(ylim)-2),]
+  for(i in 1:nrow(bbnodes)){
+    dist <- sqrt((bbeles1$X - bbnodes$X[i])^2 + (bbeles1$Y - bbnodes$Y[i] )^2)
+    xx2 <- which(dist==min(dist))[1]
+    bbeles <- c(bbeles,bbeles1$node[xx2])
+  }
+  
+  nutis <- 1:length(nutNames)
+  nutDims <- rep(3,length(nutNames))
+  scales <- rep(1,length(nutNames))
+  
+  plist <- list()
+  pei=1
+
+    length_periods <- length(periods)
+
+  for(pei in 1:length(periods)){
+
+      fileNos <- 1:nfiles
+
+ 
+    # get the model values
+    first <- 1
+    #loop through the files
+    fileNo <- 1
+    # for(fileNo in 1:nfiles){
+    for(fileNo in fileNos){
+      
+      fn1 <- mifns[fileNo]
+
+      if(file.exists(fn1)){
+        nc <- nc_open(fn1, readunlim=F)
+        print(paste("file opened",fn1))
+      }else{
+        print(paste("file not found",fn1))
+        break
+      }
+      
+      time2 <- ncvar_get(nc, "Times", start=c(1,1), count=c(-1,-1))
+      time2 <- as.POSIXct(time2, format="%Y-%m-%dT%H:%M:%S", tz="UTC")
+      ntime <- length(time2)
+      
+      if(ntime>0){
+        if(first==1){
+          time1 <- as.POSIXct(time2, tz="UTC")
+          # # find the record corresponding to the hour of the transect
+          # timi <- which(time1 == date1)
+          
+          siglay <- ncvar_get(nc, "siglay", start=c(1,1), count=c(1,-1))
+          siglev <- ncvar_get(nc, "siglev", start=c(1,1), count=c(1,-1))
+          nlay <- 1 # length(siglay)
+          h <- ncvar_get(nc, "h", start=c(1), count=c(-1))
+          
+        }else{
+          #  time1 <- c(time1, time2)
+          time1 <- rbind(data.frame(x=time1),data.frame(x=time2))[[1]]
+        }
+        
+        #      timeNos <- seq(1,ntime,stride)
+
+          timeNos <- which(time2 >= dateRange[1] & time2 <= dateRange[2])
+        if(length(timeNos) < 1 ){
+          print("time out of dateRange")
+          next
+          } # go to next file
+
+        ntime2 <- length(timeNos)
+        if(first == 1){
+          plotTimes <- time2[timeNos]
+        }else{
+          #plotTimes <- c(plotTimes, time2[timeNos])
+          plotTimes <- rbind(data.frame(x=plotTimes),data.frame(x=time2[timeNos]))[[1]]
+        }
+        
+        # set up empty arrays to hold the data from this nc file
+        list1 <- list()
+        nuti <- 1
+        for(nuti in 1:length(nutis)){
+          nutNo <- nutis[nuti]
+          nutName <- nutNames[nutNo]
+          nutDim <- nutDims[nutNo]
+          if(nutDim ==3){
+            array1 <- array(NA, dim=c(nnodes, nlay , ntime2))
+          }else{
+            array1 <- array(NA, dim=c(nnodes, 1, ntime2))
+          }
+          list1[[nuti]] <- array1
+        } # end nuti, set up arrays
+        
+        nuti <- 1
+        for(nuti in 1:length(nutis)){
+          nutNo <- nutis[nuti]
+          nutName <- nutNames[nutNo]
+          
+          #  print(paste("fileNo=",fileNo,nutName,"nnodes=",nnodes))
+          
+          timi <- 1
+          for(timi in 1:ntime2){
+            timeNo <- timeNos[timi]
+            #  print(paste("fileNo= ",fileNo,time2[timeNo]))
+            
+            nodei = 1
+            #for(nodei in 1:length(nodes)){
+            m <- nodes[nodei]
+            nutDim <- nutDims[nutNo]
+            if(nutDim ==3){
+              if(nutName == "Chl"){
+                # values1 <- ncvar_get(nc, "THETACHL1", start=c(1,1,timeNo), count=c(-1,1,1))[nodes]
+                # values2 <- ncvar_get(nc, "Phytoplankton", start=c(1,1,timeNo), count=c(-1,1,1))[nodes]
+                # values <- values1*values2
+              }else if(nutName %in% c("u","v")){
+                n <- bbeles[nodei]
+                # values <- ncvar_get(nc, nutName, start=c(1,1,1), count=c(-1,-1,-1))[bbeles,,]  
+                values <- ncvar_get(nc, nutName, start=c(1,1,timi), count=c(-1,1,1))[bbeles]  # surface only
+                #values <- apply(values, MARGIN=c(1), FUN=mean)
+              }else if(nutName =="btemp"){
+                # values <- ncvar_get(nc, nutName, start=c(1,1,1), count=c(-1,-1,-1))[nodes,,]
+                values <- ncvar_get(nc, "temp", start=c(1,20,timi), count=c(-1,1,1))[nodes] # bottom only
+                #values <- apply(values, MARGIN=c(1), FUN=mean)
+              }else{
+                # values <- ncvar_get(nc, nutName, start=c(1,1,1), count=c(-1,-1,-1))[nodes,,]
+                values <- ncvar_get(nc, nutName, start=c(1,1,timi), count=c(-1,1,1))[nodes] # surface only
+                #values <- apply(values, MARGIN=c(1), FUN=mean)
+              }
+              dim2 <- nlay
+            }else{
+              # values <- ncvar_get(nc, nutName, start=c(1,timeNo), count=c(-1,1))[nodes]
+              # dim2 <- 1
+            }
+            array1 <- list1[[nuti]]
+            # array1[nodei,,timi] <- values
+            array1[,,timi] <- values
+            list1[[nuti]] <- array1
+            
+            #  } #end nodei
+          } # end timi
+        } # end nuti
+        
+        # paste together the arrays from the time block in each ncdf file
+        if(first==1){
+          first <- 0
+          list2 <- list1
+        }else{
+          for(nuti in 1:length(nutis)){
+            nutNo <- nutis[nuti]
+            nutDim <- nutDims[nutNo]
+            if(nutDim ==3){
+              dim2 <- nlay
+            }else{
+              dim2 <- 1
+            }
+            array2 <- list2[[nuti]]
+            dim32 <- dim(array2)[3]
+            array1 <- list1[[nuti]]
+            dim31 <- dim(array1)[3]
+            array3 <- array(NA, dim=c(nnodes, dim2, dim32+dim31))
+            array3[,,1:dim32] <- array2
+            ind1 <- dim32+1
+            ind2 <- dim32+dim31
+            array3[,,ind1:ind2] <- array1
+            list2[[nuti]] <- array3
+            rm(array3)
+          } # end nuti
+          
+        } #if(fileNo==1){
+        
+      } # end if ntime>1
+      #nc_close( nc )
+    } # end fileNo loop
+    
+    plist[[pei]] <- list(list2=list2, time1=time1, plotTimes=plotTimes, nodes=nodes)
+    return(plist)
+    
+  } # end pei
+  
+}
+
+getInterp <- function(values, plotres=0.5, xlim, ylim){
+  require(akima)
+  #plotres <- 0.5 #  0.02 # 0.05 # 0.2 resolution of interpolation grid, km
+  xlength <- (xlim[2]-xlim[1])/plotres
+  ylength <- (ylim[2]-ylim[1])/plotres
+  xx <- nodes # 1:nrow(coordsn) #which(coordsn$X <= xlim[2] & coordsn$X >= xlim[1] & coordsn$Y <= ylim[2] & coordsn$Y >= ylim[1])
+  x=coordsn$X[xx]
+  y=coordsn$Y[xx]
+  z=values #values[xx]
+  data.interp <- interp(x,y,z, duplicate="mean"
+                        ,xo=seq(min(x), max(x), length = xlength)
+                        ,yo=seq(min(y), max(y), length = ylength)
+                        , extrap=FALSE
+                        , linear=TRUE
+  )
+  return(data.interp)
+}
+
+
+
+## loop through the three periods to plot  ###########################
+nutNames <- c("temp", "u", "v")
+ploti = 1 
+
+# loop could be modified to plot multiple time periods
+for(ploti in 1:1){
+  
+  # CJFAS figure dimensions
+  #Supply figures sized for publication: 1-column width is 8.84 cm, 2-column is 18.2 cm with a max. height of 23.7 cm and a resolution of 300 dpi
+  par(def.par)
+  if(ploti==1){
+    fn1 <- paste0(plotpath, "september_pre.pdf")
+  }
+
+
+  width=18.2/2.54
+  pdf(file=fn1, width=width, height=width*0.85, pointsize=10)
+  
+  n<-layout(matrix(c(1,2), 1, 2, byrow = TRUE), widths=c(1,0.25))
+  #layout.show(n)
+  
+  if(ploti==1){
+    #August 2-9
+    dateRange <- c(as.POSIXct("2024-09-06 00:00:00 UTC", tz="UTC"),  as.POSIXct("2024-09-12 23:00:00 UTC", tz="UTC")) 
+    
+  }
+  
+
+  # adjust map area within plot area
+  pltMap2 <- c(0.1,0.98,0.08,0.99)
+  
+  # get FVCOM data
+   periods <- list(
+     seq(as.numeric(format(dateRange[1], "%j")),as.numeric(format(dateRange[2], "%j")))
+   )
+   plist <- getFVCOM(xlim=xlim, ylim=ylim, periods=periods, year=format(dateRange[1], "%Y"))
+
+  list2 <- plist[[1]]$list2
+  nodes <- plist[[1]]$nodes
+  
+
+  # map view of currents and temperature
+  plotPolys(shoreline, col="white", border="black", lwd=0.5, projection=TRUE   #col="lightblue"
+            ,plt=pltMap2
+            ,xlab="Easting, km", ylab="Northing, km", cex.axis=1.0, cex.lab=1.0, tck=-0.014
+            ,xlim=xlim ,ylim=ylim
+  )
+
+  range(plist[[1]]$plotTimes)
+  
+  # interpolate model data
+  temp1 <- list2[[which(nutNames=="temp")]] # model data to plot
+  values <- apply(temp1, MARGIN=c(1), FUN=mean)
+  plotres=0.5
+  data.interp <- getInterp(values, plotres=plotres, xlim=xlim, ylim=ylim)
+  
+  colorbarlab <- nutLabs[[1]]
+  
+  # set colors and breaks for color bar, and make image plots
+  nlevel <- 256
+  colorbar <- tim.colors(nlevel) # tim.colors(256)
+  zlim <- c(10,30 )
+  
+  cols <- colorbar
+  graphics::image(data.interp, zlim=zlim, col=cols, add=TRUE
+                  # , xaxt="n"
+                  , yaxt="n"
+                  ,ylim=ylim
+                  ,xlim=xlim
+                  ,xlab=""
+  )
+  
+  # plot image again, slightly shifted, to eliminate aliasing artifacts in image rendering
+  data.interp2 <- data.interp
+  data.interp2$y <- data.interp$y + plotres/2
+  data.interp2$x <- data.interp$x + plotres/2
+  graphics::image(data.interp2, zlim=zlim, col=cols, add=TRUE
+                  # , xaxt="n"
+                  , yaxt="n"
+                  ,ylim=ylim
+                  ,xlim=xlim
+                  ,xlab=""
+  )
+  
+  #contour(data.interp, add=TRUE, levels=seq(2,30,2))
+  #  contour(data.interp, add=TRUE, levels=c(seq(0,6),seq(8,30,2)))
+  
+  addPolys(mask2, col="tan", border="black")
+  #legend("topleft",legend="b",bty="n")
+  
+  uscale <- abs(xlim[2]-xlim[1])/3.5 # scale so that uprime arrow is 1/10 of x axis range for 1 m/s velocity
+
+  # interpolate velocities to regular grid
+  # use a small value of plotres, then sample from the results with skip
+  # to get arrows right up to the shoreline
+  plotresv=0.5
+  u <- list2[[which(nutNames=="u")]][,1, ]
+  values <- apply(u, MARGIN=c(1), FUN=mean)
+  ui <- getInterp(values, plotres=plotresv, xlim=xlim, ylim=ylim)
+  v <- list2[[which(nutNames=="v")]][,1, ]
+  values <- apply(v, MARGIN=c(1), FUN=mean)
+  vi <- getInterp(values, plotres=plotresv, xlim=xlim, ylim=ylim)
+  
+  x0 <- c() # ui$x
+  y0 <- c() # ui$y
+  x1 <- c()
+  y1 <- c()
+  # rearrange into vectors for arrows()
+  skip=4
+  # current vectors will be plotted along north-south or east-west lines
+  # change "skip" to modify spacing along the lines
+  # multiply "skip" by a factor in i or j to modify spacing between lines
+  # or make lines go north-south or east-west
+  for(i in seq(1,length(ui$x),by=skip*5)){
+    for(j in seq(1,length(ui$y),by=skip)){
+      x0 <- c(x0, ui$x[i])
+      y0 <- c(y0, ui$y[j])
+      x1 <- c(x1, ui$z[i,j]*uscale)
+      y1 <- c(y1, vi$z[i,j]*uscale)
+    }
+  }
+  # select locations within the shoreline
+  events <- data.frame(EID=1:length(x0), X=x0, Y=y0)
+  fp <- findPolys (events=events, polys=shoreline )
+  arrows(x0=x0[fp$EID], y0=y0[fp$EID], x1=x0[fp$EID]+x1[fp$EID], y1=y0[fp$EID]+y1[fp$EID], length = 0.03, angle = 30, col="black")
+  
+ 
+  # plot a scale arrow for velocity arrows
+  x0 <- grconvertX(0.85, from="npc")
+  y0 <- grconvertY(0.07, from="npc")
+  arrows(x0=x0, y0=y0, x1=x0+0.05*uscale, y1=y0, length = 0.03, angle = 30)
+  y0 <- grconvertY(0.05, from="npc")
+  text(x0-10, y0, expression(paste("0.125 ",m," ",s^{-1})), pos=4)
+
+  # box(which="plot", col="red")
+  # box(which="figure", col="orange")
+  # box(which="inner", col="yellow")
+  # box(which="outer", col="blue")
+  
+  x0 <- grconvertX(0.1, from="npc")
+  y0 <- grconvertY(0.90, from="npc")
+  text(x0, y0, paste(dateRange, collapse = " - "), pos=4)
+  
+  # plot the scale bar 
+  par(mar=c(8, 2.1, 5, 3.2) )
+  image.scale(zlim=zlim, col=colorbar, axis.pos=4)
+  mtext(colorbarlab,side=2,line=0.3, cex=0.7)
+  
+  par(def.par)
+  graphics.off()
+  
+  }# end ploti
+  #############################
+  
+
+
+
+
+```
+
+
+```{r sept_during}
+# Mark Rowe April 20, 2026
+# mark.rowe@noaa.gov
+# R script for Map figure of LEOFS temperature and currents
+# the user should review, check, and understand the plotting script to 
+# verify that it is free from errors and suitable for the intended purpose
+
+def.par <- par(no.readonly = TRUE) # save default, for resetting...
+require(PBSmapping)
+require(fields)
+require(ncdf4)
+
+topDir<- "data/11_Hydrodynamic_Modeling/" 
+rpath <- topDir 
+plotpath<- topDir 
+
+source(paste0(rpath,"proj_functions.R")) # project coordinates between lat lon and projected coordinates (meters or km)
+source(paste0(rpath,"image_scale.R")) # add a color scale to a plot
+load(paste0(rpath,"erie05lcc_grid_polys.Rdata"))
+load(paste0(rpath,"erie05lcc_grid_coords.Rdata"))
+coordsn$X <- coordsn$X/1000
+coordsn$Y <- coordsn$Y/1000
+coordse$X <- coordse$X/1000
+coordse$Y <- coordse$Y/1000
+load(paste0(rpath,"mask2.Rdata"))
+
+##############################################
+# load info for FVCOM temperature, currents
+###############################################
+fvcomDir <- paste0(topDir,"september/")
+
+#4-20-26 downloaded leofs output from
+#https://www.ncei.noaa.gov/data/operational-nowcast-and-forecast-hydrodynamic-model-systems-co-ops/access/lake-erie-operational-forecast-system-leofs/2024/08/
+
+
+mifns <- Sys.glob(paste0(fvcomDir,"*.nc"))
+nfiles <- length(mifns)
+xlimLL <- c(-83.47336, -78.8) 
+ylimLL <- c(41.36373, 43) 
+lims <- projLcc(data.frame(lon=xlimLL, lat=ylimLL) , prj_new)
+xlim <- lims$X
+ylim <- lims$Y
+
+plotPolys(shoreline)
+plotPolys(shoreline, xlim=xlim, ylim=ylim, projection = TRUE)
+
+nutNames <- c("temp", "u", "v")
+nutLabs <- list( 
+  expression(paste("Temperature, ",degree,"C"))
+  ,expression(paste("u velocity, ",m,"/s"))
+  ,expression(paste("v velocity, ",m,"/s"))
+)
+getFVCOM <- function(xlim, ylim, periods, year){
+  # plotPolys(shorelineLL, xlim=xlimLL, ylim=ylimLL)
+  # plotPolys(shoreline, xlim=xlim, ylim=ylim, projection=TRUE)
+  
+  print(paste(xlim,ylim))
+  
+  ro1 <-  which(coordsn$X > min(xlim)-2 & coordsn$X < max(xlim)+2 & coordsn$Y > min(ylim)-2 & coordsn$Y < max(ylim)+2)
+  nodes <- coordsn$node[ro1]
+  bbnodes <- coordsn[ro1,]
+  nnodes <- length(nodes)
+  
+  # # find the element closest to each node for getting the velocities
+  bbeles <- c()
+  bbeles1 <- coordse[which(coordse$X <= max(xlim)+2 & coordse$X >= min(xlim)-2 & coordse$Y <= max(ylim)+2 & coordse$Y >= min(ylim)-2),]
+  for(i in 1:nrow(bbnodes)){
+    dist <- sqrt((bbeles1$X - bbnodes$X[i])^2 + (bbeles1$Y - bbnodes$Y[i] )^2)
+    xx2 <- which(dist==min(dist))[1]
+    bbeles <- c(bbeles,bbeles1$node[xx2])
+  }
+  
+  nutis <- 1:length(nutNames)
+  nutDims <- rep(3,length(nutNames))
+  scales <- rep(1,length(nutNames))
+  
+  plist <- list()
+  pei=1
+
+    length_periods <- length(periods)
+
+  for(pei in 1:length(periods)){
+
+      fileNos <- 1:nfiles
+
+ 
+    # get the model values
+    first <- 1
+    #loop through the files
+    fileNo <- 1
+    # for(fileNo in 1:nfiles){
+    for(fileNo in fileNos){
+      
+      fn1 <- mifns[fileNo]
+
+      if(file.exists(fn1)){
+        nc <- nc_open(fn1, readunlim=F)
+        print(paste("file opened",fn1))
+      }else{
+        print(paste("file not found",fn1))
+        break
+      }
+      
+      time2 <- ncvar_get(nc, "Times", start=c(1,1), count=c(-1,-1))
+      time2 <- as.POSIXct(time2, format="%Y-%m-%dT%H:%M:%S", tz="UTC")
+      ntime <- length(time2)
+      
+      if(ntime>0){
+        if(first==1){
+          time1 <- as.POSIXct(time2, tz="UTC")
+          # # find the record corresponding to the hour of the transect
+          # timi <- which(time1 == date1)
+          
+          siglay <- ncvar_get(nc, "siglay", start=c(1,1), count=c(1,-1))
+          siglev <- ncvar_get(nc, "siglev", start=c(1,1), count=c(1,-1))
+          nlay <- 1 # length(siglay)
+          h <- ncvar_get(nc, "h", start=c(1), count=c(-1))
+          
+        }else{
+          #  time1 <- c(time1, time2)
+          time1 <- rbind(data.frame(x=time1),data.frame(x=time2))[[1]]
+        }
+        
+        #      timeNos <- seq(1,ntime,stride)
+
+          timeNos <- which(time2 >= dateRange[1] & time2 <= dateRange[2])
+        if(length(timeNos) < 1 ){
+          print("time out of dateRange")
+          next
+          } # go to next file
+
+        ntime2 <- length(timeNos)
+        if(first == 1){
+          plotTimes <- time2[timeNos]
+        }else{
+          #plotTimes <- c(plotTimes, time2[timeNos])
+          plotTimes <- rbind(data.frame(x=plotTimes),data.frame(x=time2[timeNos]))[[1]]
+        }
+        
+        # set up empty arrays to hold the data from this nc file
+        list1 <- list()
+        nuti <- 1
+        for(nuti in 1:length(nutis)){
+          nutNo <- nutis[nuti]
+          nutName <- nutNames[nutNo]
+          nutDim <- nutDims[nutNo]
+          if(nutDim ==3){
+            array1 <- array(NA, dim=c(nnodes, nlay , ntime2))
+          }else{
+            array1 <- array(NA, dim=c(nnodes, 1, ntime2))
+          }
+          list1[[nuti]] <- array1
+        } # end nuti, set up arrays
+        
+        nuti <- 1
+        for(nuti in 1:length(nutis)){
+          nutNo <- nutis[nuti]
+          nutName <- nutNames[nutNo]
+          
+          #  print(paste("fileNo=",fileNo,nutName,"nnodes=",nnodes))
+          
+          timi <- 1
+          for(timi in 1:ntime2){
+            timeNo <- timeNos[timi]
+            #  print(paste("fileNo= ",fileNo,time2[timeNo]))
+            
+            nodei = 1
+            #for(nodei in 1:length(nodes)){
+            m <- nodes[nodei]
+            nutDim <- nutDims[nutNo]
+            if(nutDim ==3){
+              if(nutName == "Chl"){
+                # values1 <- ncvar_get(nc, "THETACHL1", start=c(1,1,timeNo), count=c(-1,1,1))[nodes]
+                # values2 <- ncvar_get(nc, "Phytoplankton", start=c(1,1,timeNo), count=c(-1,1,1))[nodes]
+                # values <- values1*values2
+              }else if(nutName %in% c("u","v")){
+                n <- bbeles[nodei]
+                # values <- ncvar_get(nc, nutName, start=c(1,1,1), count=c(-1,-1,-1))[bbeles,,]  
+                values <- ncvar_get(nc, nutName, start=c(1,1,timi), count=c(-1,1,1))[bbeles]  # surface only
+                #values <- apply(values, MARGIN=c(1), FUN=mean)
+              }else if(nutName =="btemp"){
+                # values <- ncvar_get(nc, nutName, start=c(1,1,1), count=c(-1,-1,-1))[nodes,,]
+                values <- ncvar_get(nc, "temp", start=c(1,20,timi), count=c(-1,1,1))[nodes] # bottom only
+                #values <- apply(values, MARGIN=c(1), FUN=mean)
+              }else{
+                # values <- ncvar_get(nc, nutName, start=c(1,1,1), count=c(-1,-1,-1))[nodes,,]
+                values <- ncvar_get(nc, nutName, start=c(1,1,timi), count=c(-1,1,1))[nodes] # surface only
+                #values <- apply(values, MARGIN=c(1), FUN=mean)
+              }
+              dim2 <- nlay
+            }else{
+              # values <- ncvar_get(nc, nutName, start=c(1,timeNo), count=c(-1,1))[nodes]
+              # dim2 <- 1
+            }
+            array1 <- list1[[nuti]]
+            # array1[nodei,,timi] <- values
+            array1[,,timi] <- values
+            list1[[nuti]] <- array1
+            
+            #  } #end nodei
+          } # end timi
+        } # end nuti
+        
+        # paste together the arrays from the time block in each ncdf file
+        if(first==1){
+          first <- 0
+          list2 <- list1
+        }else{
+          for(nuti in 1:length(nutis)){
+            nutNo <- nutis[nuti]
+            nutDim <- nutDims[nutNo]
+            if(nutDim ==3){
+              dim2 <- nlay
+            }else{
+              dim2 <- 1
+            }
+            array2 <- list2[[nuti]]
+            dim32 <- dim(array2)[3]
+            array1 <- list1[[nuti]]
+            dim31 <- dim(array1)[3]
+            array3 <- array(NA, dim=c(nnodes, dim2, dim32+dim31))
+            array3[,,1:dim32] <- array2
+            ind1 <- dim32+1
+            ind2 <- dim32+dim31
+            array3[,,ind1:ind2] <- array1
+            list2[[nuti]] <- array3
+            rm(array3)
+          } # end nuti
+          
+        } #if(fileNo==1){
+        
+      } # end if ntime>1
+      #nc_close( nc )
+    } # end fileNo loop
+    
+    plist[[pei]] <- list(list2=list2, time1=time1, plotTimes=plotTimes, nodes=nodes)
+    return(plist)
+    
+  } # end pei
+  
+}
+
+getInterp <- function(values, plotres=0.5, xlim, ylim){
+  require(akima)
+  #plotres <- 0.5 #  0.02 # 0.05 # 0.2 resolution of interpolation grid, km
+  xlength <- (xlim[2]-xlim[1])/plotres
+  ylength <- (ylim[2]-ylim[1])/plotres
+  xx <- nodes # 1:nrow(coordsn) #which(coordsn$X <= xlim[2] & coordsn$X >= xlim[1] & coordsn$Y <= ylim[2] & coordsn$Y >= ylim[1])
+  x=coordsn$X[xx]
+  y=coordsn$Y[xx]
+  z=values #values[xx]
+  data.interp <- interp(x,y,z, duplicate="mean"
+                        ,xo=seq(min(x), max(x), length = xlength)
+                        ,yo=seq(min(y), max(y), length = ylength)
+                        , extrap=FALSE
+                        , linear=TRUE
+  )
+  return(data.interp)
+}
+
+
+
+## loop through the three periods to plot  ###########################
+nutNames <- c("temp", "u", "v")
+ploti = 1 
+
+# loop could be modified to plot multiple time periods
+for(ploti in 1:1){
+  
+  # CJFAS figure dimensions
+  #Supply figures sized for publication: 1-column width is 8.84 cm, 2-column is 18.2 cm with a max. height of 23.7 cm and a resolution of 300 dpi
+  par(def.par)
+  if(ploti==1){
+    fn1 <- paste0(plotpath, "september_during.pdf")
+  }
+
+
+  width=18.2/2.54
+  pdf(file=fn1, width=width, height=width*0.85, pointsize=10)
+  
+  n<-layout(matrix(c(1,2), 1, 2, byrow = TRUE), widths=c(1,0.25))
+  #layout.show(n)
+  
+  if(ploti==1){
+    #August 2-9
+    dateRange <- c(as.POSIXct("2024-09-13 00:00:00 UTC", tz="UTC"),  as.POSIXct("2024-09-17 00:00:00 UTC", tz="UTC")) 
+    
+  }
+  
+
+  # adjust map area within plot area
+  pltMap2 <- c(0.1,0.98,0.08,0.99)
+  
+  # get FVCOM data
+   periods <- list(
+     seq(as.numeric(format(dateRange[1], "%j")),as.numeric(format(dateRange[2], "%j")))
+   )
+   plist <- getFVCOM(xlim=xlim, ylim=ylim, periods=periods, year=format(dateRange[1], "%Y"))
+
+  list2 <- plist[[1]]$list2
+  nodes <- plist[[1]]$nodes
+  
+
+  # map view of currents and temperature
+  plotPolys(shoreline, col="white", border="black", lwd=0.5, projection=TRUE   #col="lightblue"
+            ,plt=pltMap2
+            ,xlab="Easting, km", ylab="Northing, km", cex.axis=1.0, cex.lab=1.0, tck=-0.014
+            ,xlim=xlim ,ylim=ylim
+  )
+
+  range(plist[[1]]$plotTimes)
+  
+  # interpolate model data
+  temp1 <- list2[[which(nutNames=="temp")]] # model data to plot
+  values <- apply(temp1, MARGIN=c(1), FUN=mean)
+  plotres=0.5
+  data.interp <- getInterp(values, plotres=plotres, xlim=xlim, ylim=ylim)
+  
+  colorbarlab <- nutLabs[[1]]
+  
+  # set colors and breaks for color bar, and make image plots
+  nlevel <- 256
+  colorbar <- tim.colors(nlevel) # tim.colors(256)
+  zlim <- c(10,30 )
+  
+  cols <- colorbar
+  graphics::image(data.interp, zlim=zlim, col=cols, add=TRUE
+                  # , xaxt="n"
+                  , yaxt="n"
+                  ,ylim=ylim
+                  ,xlim=xlim
+                  ,xlab=""
+  )
+  
+  # plot image again, slightly shifted, to eliminate aliasing artifacts in image rendering
+  data.interp2 <- data.interp
+  data.interp2$y <- data.interp$y + plotres/2
+  data.interp2$x <- data.interp$x + plotres/2
+  graphics::image(data.interp2, zlim=zlim, col=cols, add=TRUE
+                  # , xaxt="n"
+                  , yaxt="n"
+                  ,ylim=ylim
+                  ,xlim=xlim
+                  ,xlab=""
+  )
+  
+  #contour(data.interp, add=TRUE, levels=seq(2,30,2))
+  #  contour(data.interp, add=TRUE, levels=c(seq(0,6),seq(8,30,2)))
+  
+  addPolys(mask2, col="tan", border="black")
+  #legend("topleft",legend="b",bty="n")
+  
+  uscale <- abs(xlim[2]-xlim[1])/2.5 # scale so that uprime arrow is 1/10 of x axis range for 1 m/s velocity
+
+  # interpolate velocities to regular grid
+  # use a small value of plotres, then sample from the results with skip
+  # to get arrows right up to the shoreline
+  plotresv=0.5
+  u <- list2[[which(nutNames=="u")]][,1, ]
+  values <- apply(u, MARGIN=c(1), FUN=mean)
+  ui <- getInterp(values, plotres=plotresv, xlim=xlim, ylim=ylim)
+  v <- list2[[which(nutNames=="v")]][,1, ]
+  values <- apply(v, MARGIN=c(1), FUN=mean)
+  vi <- getInterp(values, plotres=plotresv, xlim=xlim, ylim=ylim)
+  
+  x0 <- c() # ui$x
+  y0 <- c() # ui$y
+  x1 <- c()
+  y1 <- c()
+  # rearrange into vectors for arrows()
+  skip=4
+  # current vectors will be plotted along north-south or east-west lines
+  # change "skip" to modify spacing along the lines
+  # multiply "skip" by a factor in i or j to modify spacing between lines
+  # or make lines go north-south or east-west
+  for(i in seq(1,length(ui$x),by=skip*5)){
+    for(j in seq(1,length(ui$y),by=skip)){
+      x0 <- c(x0, ui$x[i])
+      y0 <- c(y0, ui$y[j])
+      x1 <- c(x1, ui$z[i,j]*uscale)
+      y1 <- c(y1, vi$z[i,j]*uscale)
+    }
+  }
+  # select locations within the shoreline
+  events <- data.frame(EID=1:length(x0), X=x0, Y=y0)
+  fp <- findPolys (events=events, polys=shoreline )
+  arrows(x0=x0[fp$EID], y0=y0[fp$EID], x1=x0[fp$EID]+x1[fp$EID], y1=y0[fp$EID]+y1[fp$EID], length = 0.03, angle = 30, col="black")
+  
+ 
+  # plot a scale arrow for velocity arrows
+  x0 <- grconvertX(0.85, from="npc")
+  y0 <- grconvertY(0.07, from="npc")
+  arrows(x0=x0, y0=y0, x1=x0+0.05*uscale, y1=y0, length = 0.03, angle = 30)
+  y0 <- grconvertY(0.05, from="npc")
+  text(x0-10, y0, expression(paste("0.125 ",m," ",s^{-1})), pos=4)
+
+  # box(which="plot", col="red")
+  # box(which="figure", col="orange")
+  # box(which="inner", col="yellow")
+  # box(which="outer", col="blue")
+  
+  x0 <- grconvertX(0.1, from="npc")
+  y0 <- grconvertY(0.90, from="npc")
+  text(x0, y0, paste(dateRange, collapse = " - "), pos=4)
+  
+  # plot the scale bar 
+  par(mar=c(8, 2.1, 5, 3.2) )
+  image.scale(zlim=zlim, col=colorbar, axis.pos=4)
+  mtext(colorbarlab,side=2,line=0.3, cex=0.7)
+  
+  par(def.par)
+  graphics.off()
+  
+  }# end ploti
+  #############################
+  
+
+
+
+
+```
+
+
+
