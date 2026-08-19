@@ -1,19 +1,11 @@
 # Lake Erie Microbial Communities 
 
+Code, data, and figures from the Schmidt Lab for Lake Erie. 
 
-## Spring Cruise: May 20-26th, 2024 
-Field Team:  
-1. Brayan Yeriel Vilanova Cuevas (byv3@cornell.edu). Hewson Lab 
-2. Elijah Jones (emj68@cornell.edu). Doerr Lab
-3. Augustus Pendleton (arp27@cornell.edu). Schmidt Lab
-4. Mar Schmidt (marschmi@cornell.edu). Schmidt Lab
+Preprint:
+[https://www.biorxiv.org/content/10.64898/2026.08.03.742551v2.abstract](https://www.biorxiv.org/content/10.64898/2026.08.03.742551v2.abstract)
 
+Note that flow cytometry files must be downloaded from Zenodo:
+[https://doi.org/10.5281/zenodo.20836188](https://doi.org/10.5281/zenodo.20836188)
 
-## Summer Survey: August 9-15, 2024 
-*(will need to update dates if we get off earlier)*
-
-## Fall Cruise: September 12-18th, 2024 
-1. Sophia Aredas (sna49@cornell.edu). Schmidt Lab 
-2. Augustus Pendleton (arp27@cornell.edu). Schmidt Lab
-3. Mar Schmidt (marschmi@cornell.edu). Schmidt Lab
-4. TBD (rotation student???) 
+Note that sequencing files must be downloaded from the SRA, Bioproject \#PRJNA1481647
