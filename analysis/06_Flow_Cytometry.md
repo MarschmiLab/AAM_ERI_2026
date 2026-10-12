@@ -1,7 +1,7 @@
 ---
 title: "Analyzing Flow Cytometry Data" 
 author: "Augustus Pendleton"
-date: "06 May, 2026"
+date: "12 October, 2026"
 knitr: 
   opts_chunk: 
     fig.path: ../figures/06_Flow_Cytometry/
@@ -22,17 +22,16 @@ editor_options:
 ```{.r .cell-code}
 # Load Packages
 
-# Installing flow.gus can be a pain!!! Here is what worked for me:
+# BiocManager::install("phyloseq", force = TRUE)
+# install.packages("ggpubr")
+# # Installing flow.gus can be a pain!!! Here is what worked for me:
 # remotes::install_github('RGLab/cytoinstaller', force=TRUE)
 # devtools::install_github("RGLab/RProtoBufLib")
 # devtools::install_github("RGLab/cytolib")
 # devtools::install_github("RGLab/flowCore")
 # devtools::install_github("RGLab/ggcyto")
-# renv::install("MarschmiLab/flow.gus")
-
-
+# devtools::install_github("MarschmiLab/flow.gus")
 pacman::p_load(ggpubr, phyloseq, flow.gus, flowCore, ggcyto, tidyverse,  install = FALSE)
-
 # load colors and shapes
 source("code/R/plotting_aesthetics.R")
 
@@ -110,142 +109,9 @@ Here I define two different gates. One is just a rectangle gate which includes e
 
 ```{.r .cell-code}
 sybr_gate <- rectangleGate(filterId = "cell_gate", "BL1-H" = c(3000, 1.5e6), "SSC-H" = c(1, 1.5e6))
-
-poly_mat <- matrix(c(3000,3000, 3e5, 1.5e6, 1.5e6,
-                     1, 673, 1.5e6, 1.5e6, 1),
-                   ncol=2,nrow=5)
-
-colnames(poly_mat) <- c("BL1-H","SSC-H")
-
-poly_gate <- polygonGate(filterId="Exclude_LowSybr_BigSSC", .gate = poly_mat)
 ```
 :::
 
-
-## Plotting a random subset
-
-Now I'll plot a random subset from each plate, with my gates on top, to make sure nothing went catastrophic on a given plate.
-
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-set.seed(314)
-
-rand_cells <- map(cell_sets, sample, size = 8)
-
-map(rand_cells, \(f){
-  ggcyto(f, aes(x = "SSC-H", y = "BL1-H")) + 
-    geom_hex(bins = 100) + 
-    scale_x_logicle() + 
-    scale_y_logicle() + 
-    geom_gate(poly_gate, colour = "green")+
-    geom_gate(sybr_gate) +
-    theme(strip.text = element_text(size = 5))
-})
-```
-
-::: {.cell-output .cell-output-stdout}
-```
-$`20250514_AAM_ERI_Plate1`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-cell-plots-1.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250515_AAM_ERI_Plate2`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-cell-plots-2.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250516_AAM_ERI_Plate3`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-cell-plots-3.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250520_AAM_ERI_Plate4`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-cell-plots-4.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250520_AAM_ERI_Plate5`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-cell-plots-5.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250521_AAM_ERI_Plate6`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-cell-plots-6.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250521_AAM_ERI_Plate7`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-cell-plots-7.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250522_AAM_ERI_Plate8`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-cell-plots-8.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250523_AAM_ERI_Plate9`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-cell-plots-9.png){fig-align='center' width=2100}
-:::
-:::
-
-
-I'm conflicted on what to do about those high SSC, low SYBR cells. The red gate would include them, while the green gte would exclude them. For most samples, they're very rare, but then other samples are inexplicably high, and I don't find a common link between them (sediment turned up during sampling, big blooms, etc.). I think moving forward I'm going to disregard them (use the exclusive gate) but it's good to keep it in mind.
 
 ## Calculating Cell Counts
 
@@ -271,7 +137,6 @@ Note: count_gated_events comes from flow.gus.
 
 ```{.r .cell-code}
 cell_counts_inclusive <- map(cell_sets, count_gated_events, sybr_gate)
-cell_counts_exclusive <- map(cell_sets, count_gated_events, poly_gate)
 
 # This function helps remove extra info from the filename
 # Will likely need to edit depending on how your files are named!
@@ -292,12 +157,9 @@ inclusive_df <-
   bind_rows() %>%
   mutate(gate = "inclusive")
 
-exclusive_df <- 
-  map2(cell_counts_exclusive, wellmaps, cleaning_counts) %>%
-  bind_rows() %>%
-  mutate(gate = "exclusive")
 
-cell_counts_full <- bind_rows(inclusive_df, exclusive_df) %>%
+
+cell_counts_full <- bind_rows(inclusive_df) %>%
   mutate(cells_per_ml = (gated / volume_sampled) * sybr_dilution * glut_dilution * manual_dilution * 1000)
 ```
 :::
@@ -317,16 +179,16 @@ cell_counts_full %>%
 ::: {.cell-output .cell-output-stdout}
 ```
    initial gated   percent
-1     2486  1100 0.4424779
-2     2687  1131 0.4209155
-3     2602  1176 0.4519600
-4     2981  1256 0.4213351
-5     3085  1332 0.4317666
-6     3410  1335 0.3914956
-7     2486  1344 0.5406275
-8     2687  1420 0.5284704
-9     2602  1430 0.5495772
-10    2981  1582 0.5306944
+1     2486  1344 0.5406275
+2     2687  1420 0.5284704
+3     2602  1430 0.5495772
+4     2981  1582 0.5306944
+5     3085  1598 0.5179903
+6     3410  1626 0.4768328
+7    24737  7349 0.2970853
+8    22968  7640 0.3326367
+9    25144  8158 0.3244512
+10   29686  8287 0.2791552
                                                    sample Well
 1  20250521_AAM_ERI_Plate7_Experiment_Cell_Counts_H10.fcs  H10
 2  20250521_AAM_ERI_Plate7_Experiment_Cell_Counts_E11.fcs  E11
@@ -334,115 +196,26 @@ cell_counts_full %>%
 4  20250521_AAM_ERI_Plate7_Experiment_Cell_Counts_E10.fcs  E10
 5   20250523_AAM_ERI_Plate9_Experiment_Cell_Counts_G1.fcs  G01
 6   20250523_AAM_ERI_Plate9_Experiment_Cell_Counts_G2.fcs  G02
-7  20250521_AAM_ERI_Plate7_Experiment_Cell_Counts_H10.fcs  H10
-8  20250521_AAM_ERI_Plate7_Experiment_Cell_Counts_E11.fcs  E11
-9  20250521_AAM_ERI_Plate7_Experiment_Cell_Counts_H11.fcs  H11
-10 20250521_AAM_ERI_Plate7_Experiment_Cell_Counts_E10.fcs  E10
+7   20250516_AAM_ERI_Plate3_Experiment_Cell_Counts_E7.fcs  E07
+8   20250515_AAM_ERI_Plate2_Experiment_Cell_Counts_E1.fcs  E01
+9   20250520_AAM_ERI_Plate4_Experiment_Cell_Counts_G4.fcs  G04
+10  20250516_AAM_ERI_Plate3_Experiment_Cell_Counts_E8.fcs  E08
                       Sample_ID Target ...8      gate cells_per_ml
-1  AAM_ERI_20240915_937_FC_EW_1  Cells   NA exclusive     224624.4
-2  AAM_ERI_20240915_937_FC_EW_2  Cells   NA exclusive     230954.7
-3  AAM_ERI_20240915_937_FC_EW_1  Cells   NA exclusive     240143.9
-4  AAM_ERI_20240915_937_FC_EW_2  Cells   NA exclusive     256480.2
-5  AAM_ERI_20240915_937_FC_EW_1  Cells   NA exclusive     271999.7
-6  AAM_ERI_20240915_937_FC_EW_1  Cells   NA exclusive     272612.3
-7  AAM_ERI_20240915_937_FC_EW_1  Cells   NA inclusive     274450.2
-8  AAM_ERI_20240915_937_FC_EW_2  Cells   NA inclusive     289969.7
-9  AAM_ERI_20240915_937_FC_EW_1  Cells   NA inclusive     292011.7
-10 AAM_ERI_20240915_937_FC_EW_2  Cells   NA inclusive     323050.7
+1  AAM_ERI_20240915_937_FC_EW_1  Cells   NA inclusive     274450.2
+2  AAM_ERI_20240915_937_FC_EW_2  Cells   NA inclusive     289969.7
+3  AAM_ERI_20240915_937_FC_EW_1  Cells   NA inclusive     292011.7
+4  AAM_ERI_20240915_937_FC_EW_2  Cells   NA inclusive     323050.7
+5  AAM_ERI_20240915_937_FC_EW_1  Cells   NA inclusive     326318.0
+6  AAM_ERI_20240915_937_FC_EW_1  Cells   NA inclusive     332035.7
+7   AAM_ERI_20240915_15_FC_BW_1  Cells   NA inclusive    1500695.2
+8   AAM_ERI_20240916_10_FC_BW_1  Cells   NA inclusive    1560118.6
+9   AAM_ERI_20240916_09_FC_BW_1  Cells   NA inclusive    1665896.2
+10  AAM_ERI_20240915_15_FC_BW_1  Cells   NA inclusive    1692238.5
 ```
 :::
 :::
 
 
-We go back and measure this twice for both replicates - just to make sure! 
-
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-cell_counts_full %>%
-  mutate(Month = str_extract(Sample_ID, "2024.."),
-         Depth_Class = str_extract(Sample_ID, "EW|BW")) %>%
-  ggplot(aes(x = Month, y = cells_per_ml, color = Depth_Class)) + 
-  geom_boxplot(position = position_dodge(width = 1)) + 
-  geom_jitter(position = position_dodge(width = 1)) + 
-  facet_wrap(~gate) + 
-  scale_y_continuous(labels = scales::label_comma())
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/plotting-cells-1.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-cell_counts_full %>%
-    mutate(Month = str_extract(Sample_ID, "2024.."),
-         Depth_Class = str_extract(Sample_ID, "EW|BW")) %>%
-  ggplot(aes(x = gate, y = cells_per_ml, group = sample, color = Depth_Class)) + 
-  geom_point() + 
-  geom_line() + 
-  scale_y_continuous(labels = scales::label_comma())
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/plotting-cells-2.png){fig-align='center' width=2100}
-:::
-:::
-
-
-The inclusive gating usually doesn't matter...except for a few very special samples. I think for now, we're gonna avoid it, but will discuss with Marian. 
-Who are those crazy high outliers?
-
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-cell_counts_full %>%
-  arrange(desc(cells_per_ml)) %>% 
-  head(10)
-```
-
-::: {.cell-output .cell-output-stdout}
-```
-   initial gated   percent
-1   229754 91161 0.3967766
-2   222639 88372 0.3969296
-3   189327 84123 0.4443265
-4   167761 75739 0.4514697
-5   229754 72249 0.3144624
-6   222639 69869 0.3138219
-7   189327 67947 0.3588870
-8   167761 61600 0.3671890
-9   131802 55853 0.4237644
-10  131802 55318 0.4197053
-                                                   sample Well
-1  20250523_AAM_ERI_Plate9_Experiment_Cell_Counts_F11.fcs  F11
-2  20250523_AAM_ERI_Plate9_Experiment_Cell_Counts_F10.fcs  F10
-3   20250521_AAM_ERI_Plate6_Experiment_Cell_Counts_F2.fcs  F02
-4   20250521_AAM_ERI_Plate6_Experiment_Cell_Counts_F1.fcs  F01
-5  20250523_AAM_ERI_Plate9_Experiment_Cell_Counts_F11.fcs  F11
-6  20250523_AAM_ERI_Plate9_Experiment_Cell_Counts_F10.fcs  F10
-7   20250521_AAM_ERI_Plate6_Experiment_Cell_Counts_F2.fcs  F02
-8   20250521_AAM_ERI_Plate6_Experiment_Cell_Counts_F1.fcs  F01
-9   20250523_AAM_ERI_Plate9_Experiment_Cell_Counts_E5.fcs  E05
-10  20250523_AAM_ERI_Plate9_Experiment_Cell_Counts_E5.fcs  E05
-                     Sample_ID Target ...8      gate cells_per_ml
-1  AAM_ERI_20240810_59_FC_EW_1  Cells   NA inclusive     18615441
-2  AAM_ERI_20240810_59_FC_EW_1  Cells   NA inclusive     18045916
-3  AAM_ERI_20240810_59_FC_EW_1  Cells   NA inclusive     17178253
-4  AAM_ERI_20240810_59_FC_EW_1  Cells   NA inclusive     15466207
-5  AAM_ERI_20240810_59_FC_EW_1  Cells   NA exclusive     14753535
-6  AAM_ERI_20240810_59_FC_EW_1  Cells   NA exclusive     14267529
-7  AAM_ERI_20240810_59_FC_EW_1  Cells   NA exclusive     13875049
-8  AAM_ERI_20240810_59_FC_EW_1  Cells   NA exclusive     12578966
-9  AAM_ERI_20240915_22_FC_EW_1  Cells   NA inclusive     11405406
-10 AAM_ERI_20240915_22_FC_EW_1  Cells   NA exclusive     11296157
-```
-:::
-:::
-
-
-I mean, peak August bloom! Seems reasonable. That September 22 also had a ton of Cyanobacteria there
 
 # Analyzing pigments
 
@@ -463,262 +236,9 @@ There's a lot of directions to go here, and I'm just tentatively starting. Here,
 ::: {.cell layout-align="center"}
 
 ```{.r .cell-code}
-low_chl_no_pe_gate <- rectangleGate(filterId = "chl_gate", "BL2-H" = c(1, 408), "BL3-H" = c(386, 5e3))
-no_chl_low_pe_gate <- rectangleGate(filterId = "pe_gate", "BL2-H" = c(407, 1.5e6), "BL3-H" = c(1, 386))
-
-
-high_chl_high_pe_mat <- 
-  matrix(c(408, 1e4, 1.5e6, 1.5e6, 1e5, 408,
-         386, 386, 1e5, 1.5e6, 1.5e6, 5e3),
-                   ncol=2,nrow=6)
-
-colnames(high_chl_high_pe_mat) <- c("BL2-H", "BL3-H")
-
-high_chl_high_pe_gate <- polygonGate(filterId="high_chl_high_pe", boundaries = high_chl_high_pe_mat)
-
-
-
-high_chl_no_pe_mat <- 
-  matrix(
-    c(1, 408, 1e5, 1,
-      5e3, 5e3, 1.5e6, 1.5e6),
-                   ncol=2,nrow=4)
-
-colnames(high_chl_no_pe_mat) <- c("BL2-H", "BL3-H")
-
-high_chl_no_pe_gate <- polygonGate(filterId="high_chl_no_pe", boundaries = high_chl_no_pe_mat)
-
 chl_big <- rectangleGate(filterId = "is_big", "BL3-H" = c(500, 1e7), "FSC-H" = c(1e5, 1e7))
 chl_small <- rectangleGate(filterId = "is_small", "BL3-H" = c(500, 1e7), "FSC-H" = c(100, 1e5))
 ```
-:::
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-set.seed(314)
-
-rand_pigment <- map(pigment_sets, sample, size = 8)
-
-map(rand_pigment, \(f){
-  ggcyto(f, aes(x = "BL2-H", y = "BL3-H")) + 
-    geom_hex(bins = 100) + 
-    scale_x_logicle() + 
-    scale_y_logicle() + 
-    geom_gate(low_chl_no_pe_gate, colour = "brown") +
-    geom_gate(no_chl_low_pe_gate, colour = "orange") + 
-    geom_gate(high_chl_high_pe_gate, colour = "purple") + 
-    geom_gate(high_chl_no_pe_gate, colour = "blue") + 
-    theme(strip.text = element_text(size = 5))
-})
-```
-
-::: {.cell-output .cell-output-stdout}
-```
-$`20250514_AAM_ERI_Plate1`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-1.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250515_AAM_ERI_Plate2`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-2.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250516_AAM_ERI_Plate3`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-3.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250520_AAM_ERI_Plate4`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-4.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250520_AAM_ERI_Plate5`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-5.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250521_AAM_ERI_Plate6`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-6.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250521_AAM_ERI_Plate7`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-7.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250522_AAM_ERI_Plate8`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-8.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250523_AAM_ERI_Plate9`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-9.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-map(rand_pigment, \(f){
-  ggcyto(f, aes(x = "FSC-H", y = "BL3-H")) + 
-    geom_hex(bins = 100) + 
-    scale_x_logicle() + 
-    scale_y_logicle() + 
-    geom_gate(chl_big, colour = "brown") +
-    theme(strip.text = element_text(size = 5))
-})
-```
-
-::: {.cell-output .cell-output-stdout}
-```
-$`20250514_AAM_ERI_Plate1`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-10.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250515_AAM_ERI_Plate2`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-11.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250516_AAM_ERI_Plate3`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-12.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250520_AAM_ERI_Plate4`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-13.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250520_AAM_ERI_Plate5`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-14.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250521_AAM_ERI_Plate6`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-15.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250521_AAM_ERI_Plate7`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-16.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250522_AAM_ERI_Plate8`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-17.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20250523_AAM_ERI_Plate9`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/random-pig-plots-18.png){fig-align='center' width=2100}
-:::
 :::
 
 ::: {.cell layout-align="center"}
@@ -737,18 +257,10 @@ Now, we count events in each of those pigment gates. Their edges are exclusive b
 ::: {.cell layout-align="center"}
 
 ```{.r .cell-code}
-pig_counts_low_chl_no_pe <- map(pigment_sets, count_gated_events, low_chl_no_pe_gate)
-pig_counts_no_chl_low_pe <- map(pigment_sets, count_gated_events, no_chl_low_pe_gate)
-pig_counts_high_chl_high_pe <- map(pigment_sets, count_gated_events, high_chl_high_pe_gate)
-pig_counts_high_chl_no_pe <- map(pigment_sets, count_gated_events, high_chl_no_pe_gate)
 pig_counts_chl_big <- map(pigment_sets, count_gated_events, chl_big)
 pig_counts_chl_small <- map(pigment_sets, count_gated_events, chl_small)
 
 pig_count_list <- list(
-  "pig_counts_low_chl_no_pe" = pig_counts_low_chl_no_pe,
-  "pig_counts_no_chl_low_pe" = pig_counts_no_chl_low_pe, 
-  "pig_counts_high_chl_high_pe" = pig_counts_high_chl_high_pe,
-  "pig_counts_high_chl_no_pe" = pig_counts_high_chl_no_pe,
   "pig_counts_chl_big" = pig_counts_chl_big,
   "pig_counts_chl_small" = pig_counts_chl_small)
 
@@ -818,42 +330,6 @@ rsg_sets <- map(rsg_flow_files, read.flowSet)
 ```
 :::
 
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-test <- rsg_sets[[1]]
-
-ggcyto(test[1:4], aes(x = "SSC-H", y = "BL1-H")) + 
-    geom_hex(bins = 100) + 
-    scale_x_logicle() + 
-    scale_y_logicle() + 
-    geom_gate(rsg_gate) +
-    theme(strip.text = element_text(size = 5))
-```
-
-::: {.cell-output .cell-output-error}
-```
-Error:
-! object 'rsg_gate' not found
-```
-:::
-
-```{.r .cell-code}
-ggcyto(test[1:4], aes(x = "BL3-H", y = "BL1-H")) + 
-    geom_hex(bins = 100) + 
-    scale_x_logicle() + 
-    scale_y_logicle() + 
-    geom_gate(rsg_gate) +
-    theme(strip.text = element_text(size = 5))
-```
-
-::: {.cell-output .cell-output-error}
-```
-Error:
-! object 'rsg_gate' not found
-```
-:::
-:::
 
 
 ## Defining gates
@@ -874,83 +350,6 @@ het_rsg_gate <- rectangleGate(filterId = "rsg_het", "BL3-H" = c(1, 499),  "BL1-H
 ```
 :::
 
-
-## Plotting a random subset
-
-Now I'll plot a random subset from each plate, with my gates on top, to make sure nothing went catastrophic on a given plate.
-
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-set.seed(314)
-
-rsg_rand_cells <- map(rsg_sets, sample, size = 8)
-
-map(rsg_rand_cells, \(f){
-  ggcyto(f, aes(x = "SSC-H", y = "BL1-H")) + 
-    geom_hex(bins = 100) + 
-    scale_x_logicle() + 
-    scale_y_logicle() + 
-    geom_gate(rsg_gate) +
-    theme(strip.text = element_text(size = 5))
-})
-```
-
-::: {.cell-output .cell-output-stdout}
-```
-$`20251217_AAM_ERI_RSG_Plate1`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/rsg-random-cell-plots-1.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20251218_AAM_ERI_RSG_Plate2`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/rsg-random-cell-plots-2.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20251218_AAM_ERI_RSG_Plate3`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/rsg-random-cell-plots-3.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20251219_AAM_ERI_RSG_Plate4`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/rsg-random-cell-plots-4.png){fig-align='center' width=2100}
-:::
-
-::: {.cell-output .cell-output-stdout}
-```
-
-$`20251219_AAM_ERI_RSG_Plate5`
-```
-:::
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/rsg-random-cell-plots-5.png){fig-align='center' width=2100}
-:::
-:::
 
 
 ## Calculating Cell Counts
@@ -1128,7 +527,7 @@ rsg_final <- cell_df %>%
          het_rsg_per_ml = (het_rsg_count / volume_sampled) * storage_dilution * glut_dilution * manual_dilution * 1000,
          het_rsg_perc_pos = het_rsg_per_ml / (rsg_total_per_ml - rsg_chl_per_ml)
          ) %>%
-  select(Sample_ID, rsg_total_per_ml, rsg_pos_per_ml, rsg_perc_pos,, het_rsg_per_ml, het_rsg_perc_pos, rsg_mfi)  %>%
+  select(Sample_ID, rsg_total_per_ml, rsg_pos_per_ml, rsg_perc_pos, het_rsg_per_ml, het_rsg_perc_pos, rsg_mfi)  %>%
   mutate(Sample_ID = str_remove(Sample_ID, "_RSG"))
 
 head(rsg_final)
@@ -1159,7 +558,7 @@ head(rsg_final)
 ```{.r .cell-code}
 rsg_final %>%
   separate_wider_delim(Sample_ID, delim = "_", names = c("x","y","z", "Station", "w", "Depth", "Replicate")) %>%
-  ggplot(aes(x = Depth, y = rsg_pos_per_ml, group = paste(Station, Replicate))) + 
+  ggplot(aes(x = Depth, y = rsg_mfi, group = paste(Station, Replicate))) + 
   geom_point() + 
   geom_line()
 ```
@@ -1171,7 +570,7 @@ rsg_final %>%
 ```{.r .cell-code}
 rsg_final %>%
   separate_wider_delim(Sample_ID, delim = "_", names = c("x","y","z", "Station", "w", "Depth", "Replicate")) %>%
-  ggplot(aes(x = Depth, y = rsg_perc_pos, group = paste(Station, Replicate))) + 
+  ggplot(aes(x = Replicate, y = rsg_pos_per_ml, group = paste(Station, Depth))) + 
   geom_point() + 
   geom_line()
 ```
@@ -1182,36 +581,12 @@ rsg_final %>%
 
 ```{.r .cell-code}
 rsg_final %>%
-  separate_wider_delim(Sample_ID, delim = "_", names = c("x","y","z", "Station", "w", "Depth", "Replicate")) %>%
-  ggplot(aes(x = Depth, y = rsg_mfi, group = paste(Station, Replicate))) + 
-  geom_point() + 
-  geom_line()
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/rsg-qc-3.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-rsg_final %>%
-  separate_wider_delim(Sample_ID, delim = "_", names = c("x","y","z", "Station", "w", "Depth", "Replicate")) %>%
-  ggplot(aes(x = Replicate, y = rsg_pos_per_ml, group = paste(Station, Depth))) + 
-  geom_point() + 
-  geom_line()
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/rsg-qc-4.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-rsg_final %>%
   ggplot(aes(x = rsg_pos_per_ml - het_rsg_per_ml)) + 
   geom_histogram()
 ```
 
 ::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/rsg-qc-5.png){fig-align='center' width=2100}
+![](../figures/06_Flow_Cytometry/rsg-qc-3.png){fig-align='center' width=2100}
 :::
 
 ```{.r .cell-code}
@@ -1234,7 +609,7 @@ rsg_final %>%
 ```
 
 ::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/unnamed-chunk-2-1.png){fig-align='center' width=2100}
+![](../figures/06_Flow_Cytometry/unnamed-chunk-1-1.png){fig-align='center' width=2100}
 :::
 
 ```{.r .cell-code}
@@ -1245,7 +620,7 @@ rsg_final %>%
 ```
 
 ::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/unnamed-chunk-2-2.png){fig-align='center' width=2100}
+![](../figures/06_Flow_Cytometry/unnamed-chunk-1-2.png){fig-align='center' width=2100}
 :::
 :::
 
@@ -1285,7 +660,7 @@ rsg_final <- rsg_final %>%
 ```{.r .cell-code}
 cells_for_join <- 
   cell_counts_full %>%
-  dplyr::filter(gate == "exclusive") %>%
+  dplyr::filter(gate == "inclusive") %>%
   group_by(Sample_ID) %>%
   summarize(avg_cells_per_ml = mean(cells_per_ml)) %>%
   ungroup() %>%
@@ -1318,41 +693,6 @@ pig_final %>%
 :::
 
 
-Neat - I'm especially interested in the bimodal distribution for the high_chl_no_pe gate, trying to correlate those to taxonomy
-
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-pig_final %>%
-    mutate(Month = str_extract(Sample_ID, "2024.."),
-         Depth_Class = str_extract(Sample_ID, "EW|BW")) %>%
-  ggplot(aes(x = Month, y = avg_pig_per_ml, color = Depth_Class)) + 
-  geom_boxplot(position = position_dodge(width = 1)) + 
-  geom_jitter(position = position_dodge(width = 1)) + 
-  facet_wrap(~Gate) + 
-  scale_y_log10()
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/plotting-pigs-compare_month_depth-1.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-pig_final %>%
-    mutate(Month = str_extract(Sample_ID, "2024.."),
-         Depth_Class = str_extract(Sample_ID, "EW|BW")) %>%
-  ggplot(aes(x = Month, y = perc_pig, color = Depth_Class)) + 
-  geom_boxplot(position = position_dodge(width = 1)) + 
-  geom_jitter(position = position_dodge(width = 1)) + 
-  facet_wrap(~Gate)
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/plotting-pigs-compare_month_depth-2.png){fig-align='center' width=2100}
-:::
-:::
-
 
 # Incorporating flow data into our physeq
 
@@ -1375,9 +715,9 @@ pig_for_join <- wide_pig %>%
          Depth_Class = ifelse(Depth == "EW", "S","B"),
          Rep_ID = paste(Month, Station_ID, Depth_Class, sep = "_"),
          total_chl_counts = pig_counts_chl_big + pig_counts_chl_small) %>%
-  select(Rep_ID, avg_cells_per_ml:pig_counts_no_chl_low_pe, total_chl_counts) %>%
+  select(Rep_ID, avg_cells_per_ml:pig_counts_chl_small, total_chl_counts) %>%
   group_by(Rep_ID)%>%
-  summarize(across(c(avg_cells_per_ml:pig_counts_no_chl_low_pe, total_chl_counts), \(x)mean(x, na.rm = TRUE)))
+  summarize(across(c(avg_cells_per_ml:pig_counts_chl_small, total_chl_counts), \(x)mean(x, na.rm = TRUE)))
 
 meta_w_flow <- sample_data(meta_physeq) %>%
   data.frame() %>%
@@ -1474,12 +814,12 @@ KH_D025       NA         NA     0.1215000    3.99800          NA          NA
 KH_D032       NA         NA     1.2513333   14.63633          NA          NA
 KH_D040       NA         NA     0.3940000    4.90700          NA          NA
               pH  np_ratio avg_cells_per_ml rsg_total_per_ml rsg_pos_per_ml
-KH_D001       NA 103.52049          3836636              NaN            NaN
-KH_D009       NA 129.04685          6065522              NaN            NaN
-KH_D017       NA 230.26240          3581074              NaN            NaN
-KH_D025 8.535000 116.25000          4184957              NaN            NaN
-KH_D032 8.506667  46.95391         13868770              NaN            NaN
-KH_D040 8.350000 120.55556          5596721              NaN            NaN
+KH_D001       NA 103.52049          3875639              NaN            NaN
+KH_D009       NA 129.04685          6116420              NaN            NaN
+KH_D017       NA 230.26240          3626153              NaN            NaN
+KH_D025 8.535000 116.25000          4223245              NaN            NaN
+KH_D032 8.506667  46.95391         17326454              NaN            NaN
+KH_D040 8.350000 120.55556          5654715              NaN            NaN
         rsg_perc_pos het_rsg_per_ml het_rsg_perc_pos rsg_mfi pig_counts_chl_big
 KH_D001          NaN            NaN              NaN     NaN           3403.400
 KH_D009          NaN            NaN              NaN     NaN           1174.507
@@ -1487,471 +827,23 @@ KH_D017          NaN            NaN              NaN     NaN           3566.897
 KH_D025          NaN            NaN              NaN     NaN           6026.020
 KH_D032          NaN            NaN              NaN     NaN          53403.350
 KH_D040          NaN            NaN              NaN     NaN           7874.533
-        pig_counts_chl_small pig_counts_high_chl_high_pe
-KH_D001              8628.62                    3630.293
-KH_D009             14958.28                   12572.560
-KH_D017             16723.37                    8895.553
-KH_D025            141921.78                  138064.593
-KH_D032            127887.76                   65228.497
-KH_D040            128668.54                  126286.160
-        pig_counts_high_chl_no_pe pig_counts_low_chl_no_pe
-KH_D001                  5785.780                 4537.867
-KH_D009                  2509.173                 2692.690
-KH_D017                  8531.857                 6142.803
-KH_D025                  5165.160                15355.340
-KH_D032                 18615.263               150854.037
-KH_D040                  5472.133                16436.420
-        pig_counts_no_chl_low_pe total_chl_counts
-KH_D001                 3573.570         12032.02
-KH_D009                 1181.180         16132.78
-KH_D017                 3580.243         20290.27
-KH_D025                10530.520        147947.80
-KH_D032                11451.440        181291.11
-KH_D040                13913.900        136543.07
+        pig_counts_chl_small total_chl_counts
+KH_D001              8628.62         12032.02
+KH_D009             14958.28         16132.78
+KH_D017             16723.37         20290.27
+KH_D025            141921.78        147947.80
+KH_D032            127887.76        181291.11
+KH_D040            128668.54        136543.07
 ```
 :::
 :::
 
 
-# Grabbing some specific samples for examination
-
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-load("/local/workdir/arp277/AAN_LSN_Superior_NERR/data/01_Flow_Cytometry/big_algae_gate.RData")
-
-ggcyto::ggcyto_par_set("instrument")
-```
-
-::: {.cell-output .cell-output-stdout}
-```
-[[1]]
-[1] "instrument"
-
-attr(,"class")
-[1] "ggcyto_par"
-```
-:::
-
-```{.r .cell-code}
-reps_of_interest <- meta_w_flow %>%
-  dplyr::filter(DNA_ID %in% c("KH_D032",
-                              "KH_D064",
-                              "KH_D064",
-                              "KH_D066",
-                              "KH_D065",
-                              "KH_D039",
-                              "KH_D047",
-                              "KH_D070",
-                              "KH_D058",
-                              "KH_D079",
-                              "KH_D078",
-                              "KH_D042",
-                              "KH_D041",
-                              "KH_D040",
-                              "KH_D054",
-                              "KH_D051")) %>%
-  select(DNA_ID, Rep_ID)
-
-samples_of_interest <- wide_pig %>%
-  separate_wider_delim(Sample_ID, delim = "_", names = c("a","b","Date", "Station_ID","c","Depth","e"), cols_remove = FALSE) %>%
-  mutate(Month = case_when(str_detect(Date, "202405") ~ "May",
-                           str_detect(Date, "202408") ~ "August",
-                           str_detect(Date, "202409") ~ "September"),
-         Depth_Class = ifelse(Depth == "EW", "S","B"),
-         Rep_ID = paste(Month, Station_ID, Depth_Class, sep = "_"),
-         total_chl_counts = pig_counts_high_chl_high_pe + pig_counts_high_chl_no_pe + pig_counts_low_chl_no_pe)  %>%
-  select(Sample_ID, Rep_ID) %>%
-  dplyr::filter(Rep_ID %in% reps_of_interest$Rep_ID) %>%
-  left_join(reps_of_interest)
-
-wells_to_keep <- 
-  wellmaps %>%
-  bind_rows(.id = "Plate") %>%
-  dplyr::filter(Sample_ID %in% samples_of_interest$Sample_ID,
-                Target == "Pigment") %>%
-  group_by(Sample_ID) %>%
-  sample_n(1) %>%
-  dplyr::filter(str_detect(Sample_ID, "1$")) %>%
-  ungroup() %>%
-  group_split(Plate) %>%
-  map(pull, Well)
-
-
-files_of_interest <- map2(pigment_sets[c(1,2,4,5,6,7,8,9)], wells_to_keep, \(x,y){
-  data.frame(sample = sampleNames(x)) %>%
-  mutate(Well = str_extract(sample, "....fcs|...fcs"),
-         Well = str_remove(Well, ".fcs"),
-         Well = str_remove(Well, "_"),
-         Well = ifelse(nchar(Well) == 2, paste0(substr(Well, 1, 1), "0", substr(Well, 2, 2)), Well)) %>%
-    filter(Well %in% y)
-})
-
-
-full_files <- map2(files_of_interest, names(files_of_interest), \(x,y){
-  x %>%
-    mutate(filename = file.path("data/06_Flow_Cytometry",y, sample)) %>%
-    pull(filename)
-}) %>%
-  unlist()
-
-ip_fs <- read.flowSet(full_files)
-
-flo_names <- sampleNames(ip_fs)
-
-data.frame(file_name = flo_names)
-```
-
-::: {.cell-output .cell-output-stdout}
-```
-                                                     file_name
-1  20250514_AAM_ERI_Plate1_Experiment_Pigment_Analysis_B10.fcs
-2   20250514_AAM_ERI_Plate1_Experiment_Pigment_Analysis_D8.fcs
-3   20250515_AAM_ERI_Plate2_Experiment_Pigment_Analysis_B5.fcs
-4   20250515_AAM_ERI_Plate2_Experiment_Pigment_Analysis_B8.fcs
-5   20250515_AAM_ERI_Plate2_Experiment_Pigment_Analysis_C5.fcs
-6   20250515_AAM_ERI_Plate2_Experiment_Pigment_Analysis_C7.fcs
-7   20250520_AAM_ERI_Plate4_Experiment_Pigment_Analysis_A2.fcs
-8   20250520_AAM_ERI_Plate5_Experiment_Pigment_Analysis_A4.fcs
-9   20250521_AAM_ERI_Plate6_Experiment_Pigment_Analysis_B2.fcs
-10  20250521_AAM_ERI_Plate6_Experiment_Pigment_Analysis_D1.fcs
-11  20250521_AAM_ERI_Plate7_Experiment_Pigment_Analysis_D1.fcs
-12 20250522_AAM_ERI_Plate8_Experiment_Pigment_Analysis_B10.fcs
-13  20250522_AAM_ERI_Plate8_Experiment_Pigment_Analysis_B2.fcs
-14 20250523_AAM_ERI_Plate9_Experiment_Pigment_Analysis_A10.fcs
-15  20250523_AAM_ERI_Plate9_Experiment_Pigment_Analysis_A4.fcs
-```
-:::
-
-```{.r .cell-code}
-good_names <- data.frame(file_name = flo_names,
-           Sample_ID = c("AAM_ERI_20240913_60_FC_EW_1",
-                         "AAM_ERI_20240810_966_FC_EW_1",
-                         "AAM_ERI_20240814_932_FC_EW_1",
-                         "AAM_ERI_20240915_78_FC_EW_1",
-                         "AAM_ERI_20240916_09_FC_EW_1",
-                         "AAM_ERI_20240916_10_FC_EW_1",
-                         "AAM_ERI_20240913_958_FC_EW_1",
-                         "AAM_ERI_20240914_959_FC_EW_1",
-                         "AAM_ERI_20240810_59_FC_EW_1",
-                         "AAM_ERI_20240813_95_FC_EW_1",
-                         "AAM_ERI_20240915_937_FC_EW_1",
-                         "AAM_ERI_20240810_91_FC_EW_1",
-                         "AAM_ERI_20240913_58_FC_EW_1",
-                         "AAM_ERI_20240913_59_FC_EW_1",
-                         "AAM_ERI_20240915_22_FC_EW_1"
-                         )) %>%
-  left_join(samples_of_interest)
-
-dplyr::filter(wellmaps[[4]], Well == "A02")
-```
-
-::: {.cell-output .cell-output-stdout}
-```
-# A tibble: 1 × 3
-  Well  Sample_ID                    Target 
-  <chr> <chr>                        <chr>  
-1 A02   AAM_ERI_20240913_958_FC_EW_1 Pigment
-```
-:::
-
-```{.r .cell-code}
-group_annotation <- data.frame(DNA_ID = c("KH_D032",
-                              "KH_D064",
-                              "KH_D066",
-                              "KH_D065",
-                              "KH_D039",
-                              "KH_D047",
-                              "KH_D070",
-                              "KH_D058",
-                              "KH_D079",
-                              "KH_D078",
-                              "KH_D042",
-                              "KH_D041",
-                              "KH_D040",
-                              "KH_D054",
-                              "KH_D051"),
-           Group = c(rep("High Micro",6),
-                     rep("High Pseudana.",4),
-                     rep("Just Cyanob.", 5)))
-
-full_names <- good_names %>%
-  left_join(group_annotation) %>%
-  mutate(full = paste(Group, Rep_ID, sep = ":")) %>%
-  pull(full)
-
-good_name_fs <- flow.gus::rename_flowset_samples(ip_fs, full_names)
-
-ggcyto(good_name_fs,
-       aes(x = "FSC.H", y = "BL3.H")) + 
-  geom_hex(bins = 100) + 
-  scale_y_logicle() + 
-  scale_x_logicle() + 
-  coord_cartesian(xlim = c(1e2, 1e7),
-                  ylim = c(1e2, 1e7)) + 
-  geom_gate(big_algae_gate) + 
-  theme(legend.position = "right") + 
-  geom_stats(type = "count")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/unnamed-chunk-5-1.png){fig-align='center' width=4200}
-:::
-
-```{.r .cell-code}
-ggcyto(good_name_fs,
-       aes(x = "SSC.H", y = "BL3.H")) + 
-  geom_hex(bins = 100) + 
-  scale_y_logicle() + 
-  scale_x_logicle() + 
-  coord_cartesian(xlim = c(1e2, 1e7),
-                  ylim = c(1e2, 1e7)) + 
-  theme(legend.position = "right")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/unnamed-chunk-5-2.png){fig-align='center' width=4200}
-:::
-
-```{.r .cell-code}
-flow_indices <- good_names %>%
-  left_join(group_annotation) %>%
-  mutate(index = c(1:nrow(.))) %>%
-  group_split(Group)
-
-
-ggcyto(good_name_fs[flow_indices[[1]]$index],
-       aes(x = "FSC.H", y = "BL3.H")) + 
-  geom_hex(bins = 100) + 
-  scale_y_logicle() + 
-  scale_x_logicle() + 
-  coord_cartesian(xlim = c(1e2, 1e7),
-                  ylim = c(1e2, 1e7)) + 
-  geom_gate(big_algae_gate) + 
-  labs(subtitle = "High Microcystis")+ 
-  theme(legend.position = "right") + 
-  geom_stats(type = "count")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/unnamed-chunk-5-3.png){fig-align='center' width=4200}
-:::
-
-```{.r .cell-code}
-ggcyto(good_name_fs[flow_indices[[2]]$index],
-       aes(x = "FSC.H", y = "BL3.H")) + 
-  geom_hex(bins = 100) + 
-  scale_y_logicle() + 
-  scale_x_logicle() + 
-  coord_cartesian(xlim = c(1e3, 1e6),
-                  ylim = c(1e3, 1e6)) + 
-  geom_gate(big_algae_gate) + 
-  labs(subtitle = "High Pseudanabanae")+ 
-  theme(legend.position = "right") + 
-  geom_stats(type = "count")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/unnamed-chunk-5-4.png){fig-align='center' width=4200}
-:::
-
-```{.r .cell-code}
-ggcyto(good_name_fs[flow_indices[[3]]$index],
-       aes(x = "FSC.H", y = "BL3.H")) + 
-  geom_hex(bins = 100) + 
-  scale_y_logicle() + 
-  scale_x_logicle() + 
-  coord_cartesian(xlim = c(1e2, 1e7),
-                  ylim = c(1e2, 1e7)) + 
-  theme(legend.position = "right") + 
-  geom_gate(big_algae_gate) + 
-  geom_stats(type = "count")+
-  labs(subtitle = "Mostly Cyanobium")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/unnamed-chunk-5-5.png){fig-align='center' width=4200}
-:::
-:::
 
 
 ## Plotting with our flow_physeq
 
 
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-meta_w_flow %>%
-  mutate(Month = factor(Month, levels = c("May","August","September")),
-         Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  ggplot(aes(x = Basin, y = avg_cells_per_ml)) + 
-  geom_boxplot() + 
-  geom_jitter() + 
-  facet_wrap(~Month)
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/cells-across-basins-months-1.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-meta_w_flow %>%
-  ggplot(aes(x = avg_cells_per_ml, y = rsg_total_per_ml)) + 
-  geom_point() + 
-  geom_abline(slope = 1, intercept  = 0) + 
-  coord_fixed(xlim = c(1e5, 1e7), ylim = c(1e5, 1e7))
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/cells-across-basins-months-2.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-meta_w_flow %>%
-  ggplot(aes(x = avg_cells_per_ml, y = rsg_pos_per_ml)) + 
-  geom_point()
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/cells-across-basins-months-3.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-meta_w_flow %>%
-  ggplot(aes(x = avg_cells_per_ml, y = rsg_perc_pos)) + 
-  geom_point()
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/cells-across-basins-months-4.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-meta_w_flow %>%
-  mutate(Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Depth_Class == "S", Month == "September") %>%
-  ggplot(aes(x = Basin, y = rsg_perc_pos)) + 
-  geom_boxplot() + 
-  geom_jitter()
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/cells-across-basins-months-5.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-meta_w_flow %>%
-  mutate(Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Depth_Class == "S", Month == "September") %>%
-  ggplot(aes(x = Basin, y = rsg_pos_per_ml)) + 
-  geom_boxplot() + 
-  geom_jitter()
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/cells-across-basins-months-6.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-meta_w_flow %>%
-  mutate(Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Depth_Class == "S", Month == "September") %>%
-  ggplot(aes(x = Basin, y = rsg_mfi)) + 
-  geom_boxplot() + 
-  geom_jitter()
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/cells-across-basins-months-7.png){fig-align='center' width=2100}
-:::
-:::
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-meta_w_flow %>%
-  mutate(Month = factor(Month, levels = c("May","August","September")),
-         Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  ggplot(aes(x = avg_cells_per_ml, y = total_chl_counts, color = Basin)) + 
-  geom_jitter() + 
-  facet_wrap(~Month)
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/cells-vs-chl-counts-1.png){fig-align='center' width=2100}
-:::
-:::
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-meta_w_flow %>%
-  mutate(Month = factor(Month, levels = c("May","August","September")),
-         Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  pivot_longer(pig_counts_high_chl_high_pe:pig_counts_no_chl_low_pe, names_to = "chl_class", values_to = "count") %>%
-  ggplot(aes(x = avg_cells_per_ml, y = count, color = Basin)) + 
-  geom_jitter() + 
-  facet_wrap(~chl_class)
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/cells-vs-pig-gates-1.png){fig-align='center' width=2100}
-:::
-:::
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-meta_w_flow %>%
-  mutate(Month = factor(Month, levels = c("May","August","September")),
-         Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Month != "May") %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  pivot_longer(pig_counts_high_chl_high_pe:pig_counts_no_chl_low_pe, names_to = "chl_class", values_to = "count") %>%
-  filter(chl_class %in% c("pig_counts_high_chl_high_pe", "pig_counts_low_chl_no_pe", "pig_counts_high_chl_no_pe")) %>%
-  mutate(chl_class = factor(chl_class, levels = c("pig_counts_high_chl_high_pe", "pig_counts_low_chl_no_pe", "pig_counts_high_chl_no_pe"),
-                             labels = c("HC_HP","LC_LP", "HC_LP"))) %>%
-  ggplot(aes(x = Basin, y = count, color = chl_class)) + 
-  geom_boxplot(position = position_dodge(width = 1)) + 
-  geom_jitter(position = position_jitterdodge(dodge.width = 1, jitter.width = .3)) + 
-  facet_wrap(~Month) + 
-  scale_color_manual(values = c("goldenrod","firebrick", "green3")) + 
-  labs(y = "Absolute Counts")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/chl-class-month-basin-1.png){fig-align='center' width=2100}
-:::
-:::
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-meta_w_flow %>%
-  mutate(Month = factor(Month, levels = c("May","August","September")),
-         Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Month != "May") %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  pivot_longer(pig_counts_high_chl_high_pe:pig_counts_no_chl_low_pe, names_to = "chl_class", values_to = "count") %>%
-  filter(chl_class %in% c("pig_counts_high_chl_high_pe", "pig_counts_low_chl_no_pe", "pig_counts_high_chl_no_pe")) %>%
-  mutate(chl_class = factor(chl_class, levels = c("pig_counts_high_chl_high_pe", "pig_counts_low_chl_no_pe", "pig_counts_high_chl_no_pe"),
-                             labels = c("HC_HP","LC_LP", "HC_LP"))) %>%
-  ggplot(aes(x = Basin, y = count/avg_cells_per_ml, color = chl_class)) + 
-  geom_boxplot(position = position_dodge(width = 1)) + 
-  geom_jitter(position = position_jitterdodge(dodge.width = 1, jitter.width = .3)) + 
-  facet_wrap(~Month) + 
-  scale_color_manual(values = c("goldenrod","firebrick", "green3")) + 
-  labs(y = "Percent of Community")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/chl-class-percent-month-basin-1.png){fig-align='center' width=2100}
-:::
-:::
 
 ::: {.cell layout-align="center"}
 
@@ -1998,6 +890,66 @@ meta_w_flow %>%
 
 ::: {.cell-output-display}
 ![](../figures/06_Flow_Cytometry/Figure2Supp-AcrossMonths-3.png){fig-align='center' width=1200}
+:::
+:::
+
+::: {.cell layout-align="center"}
+
+```{.r .cell-code}
+meta_w_flow %>%
+  filter(DNA_ID != "KH_D076", Depth_Class == "B") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  filter(Month!="May") %>%
+  ggplot(aes(x = Basin, y = avg_cells_per_ml)) + 
+  geom_boxplot() + 
+  stat_compare_means(method = "wilcox", comparisons = list(c(1,2)), label = "p.signif") +
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6), expand = expansion(mult = c(0,0.1))) + 
+  ggbeeswarm::geom_beeswarm() +
+  facet_wrap(~Month, scales = "free") + 
+  theme(strip.text = element_blank(),
+        axis.title = element_blank()) 
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure2Bottom-AcrossBasins-1.png){fig-align='center' width=1200}
+:::
+
+```{.r .cell-code}
+meta_w_flow %>%
+  filter(DNA_ID != "KH_D076", Depth_Class == "B") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+   filter(Month!="May") %>%
+  ggplot(aes(x = Basin, y = total_chl_counts)) + 
+  geom_boxplot() + 
+  stat_compare_means(method = "wilcox", comparisons = list(c(1,2)), label = "p.signif") +
+  scale_y_continuous(labels = scales::unit_format(unit = "K", scale = 1e-3), expand = expansion(mult = c(0,0.1))) + 
+  ggbeeswarm::geom_beeswarm() +
+  facet_wrap(~Month, scales = "free") + 
+  theme(strip.text = element_blank(),
+        axis.title = element_blank()) 
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure2Bottom-AcrossBasins-2.png){fig-align='center' width=1200}
+:::
+
+```{.r .cell-code}
+meta_w_flow %>%
+  filter(DNA_ID != "KH_D076", Depth_Class == "B") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+   filter(Month!="May") %>%
+  ggplot(aes(x = Basin, y = pig_counts_chl_big)) + 
+  geom_boxplot() + 
+  stat_compare_means(method = "wilcox", comparisons = list(c(1,2)), label = "p.signif") +
+  scale_y_continuous(labels = scales::unit_format(unit = "K", scale = 1e-3), expand = expansion(mult = c(0,0.1))) + 
+  ggbeeswarm::geom_beeswarm() +
+  facet_wrap(~Month, scales = "free") + 
+  theme(strip.text = element_blank(),
+        axis.title = element_blank()) 
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure2Bottom-AcrossBasins-3.png){fig-align='center' width=1200}
 :::
 :::
 
@@ -2116,17 +1068,21 @@ meta_w_flow %>%
 
 ```{.r .cell-code}
 ggsave("test.png", width = 4, height = 2)
+
+save(meta_w_flow, file = "data/06_Flow_Cytometry/meta_w_flow.RData")
 ```
 :::
 
 
 # Mapping Cell Counts
 
+#ONLY DO THIS ON LOCAL
+
 
 ::: {.cell layout-align="center"}
 
 ```{.r .cell-code}
-pacman::p_load(sf, terra, tmap, gstat, install = FALSE)
+pacman::p_load(sf, terra, install = FALSE)
 
 # Define some shapes and objects
 
@@ -2141,6 +1097,202 @@ flow_sf <- meta_w_flow %>% dplyr::filter(!is.na(Longitude)) %>%
   dplyr::filter(DNA_ID != "KH_D076") %>%
   mutate(Month = factor(Month, levels = c("May","August","September") ))
 ```
+:::
+
+::: {.cell layout-align="center" fig.widh='10'}
+
+```{.r .cell-code}
+flow_sf %>%
+  dplyr::filter(Depth_Class == "S", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = avg_cells_per_ml), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  labs(color = "Cells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure2_Surface-1.png){fig-align='center' width=2100}
+:::
+
+```{.r .cell-code}
+flow_sf %>%
+  dplyr::filter(Depth_Class == "S", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = total_chl_counts), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "PRGn", na.value = "white", direction = 1, labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  labs(color = "Chl+ Cells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure2_Surface-2.png){fig-align='center' width=2100}
+:::
+
+```{.r .cell-code}
+flow_sf %>%
+  dplyr::filter(Depth_Class == "S", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = pig_counts_chl_big), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Greens", na.value = "white", direction = 1, labels = scales::unit_format(unit = "K", scale = 1e-3)) + 
+  labs(color = "Large\nChl+ Cells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure2_Surface-3.png){fig-align='center' width=2100}
+:::
+
+```{.r .cell-code}
+flow_sf %>%
+  dplyr::filter(Depth_Class == "S", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = rsg_pos_per_ml), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  labs(color = "RSG+\ncells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure2_Surface-4.png){fig-align='center' width=2100}
+:::
+
+```{.r .cell-code}
+flow_sf %>%
+  dplyr::filter(Depth_Class == "S", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = rsg_perc_pos), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "% RSG+") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure2_Surface-5.png){fig-align='center' width=2100}
+:::
+:::
+
+::: {.cell layout-align="center" fig.widh='10'}
+
+```{.r .cell-code}
+flow_sf %>%
+  dplyr::filter(Depth_Class == "B", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = avg_cells_per_ml), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  labs(color = "Cells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure2_Bottom-1.png){fig-align='center' width=2100}
+:::
+
+```{.r .cell-code}
+flow_sf %>%
+  dplyr::filter(Depth_Class == "B", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = total_chl_counts), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "PRGn", na.value = "white", direction = 1, labels = scales::unit_format(unit = "K", scale = 1e-3)) + 
+  labs(color = "Chl+ Cells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure2_Bottom-2.png){fig-align='center' width=2100}
+:::
+
+```{.r .cell-code}
+flow_sf %>%
+  dplyr::filter(Depth_Class == "B", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = pig_counts_chl_big), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Greens", na.value = "white", direction = 1, labels = scales::unit_format(unit = "K", scale = 1e-3)) + 
+  labs(color = "Large\nChl+ Cells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure2_Bottom-3.png){fig-align='center' width=2100}
+:::
+
+```{.r .cell-code}
+flow_sf %>%
+  dplyr::filter(Depth_Class == "B", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = rsg_pos_per_ml), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  labs(color = "RSG+\ncells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure2_Bottom-4.png){fig-align='center' width=2100}
+:::
+
+```{.r .cell-code}
+flow_sf %>%
+  dplyr::filter(Depth_Class == "B", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = rsg_perc_pos), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "% RSG+") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure2_Bottom-5.png){fig-align='center' width=2100}
+:::
 :::
 
 ::: {.cell layout-align="center"}
@@ -2534,391 +1686,36 @@ meta_w_flow %>%
 ::: {.cell layout-align="center"}
 
 ```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = avg_cells_per_ml), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "red", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA)
+meta_w_flow %>%
+  ggplot(aes(x = total_chl_counts, y = avg_cells_per_ml - total_chl_counts)) + 
+  geom_point() + 
+  scale_y_log10() + 
+  scale_x_log10() + 
+  ggpubr::stat_cor(method = "spearman")
 ```
 
 ::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/cells-spatial-1.png){fig-align='center' width=2100}
+![](../figures/06_Flow_Cytometry/unnamed-chunk-4-1.png){fig-align='center' width=2100}
 :::
 
 ```{.r .cell-code}
-bottom_sf <- flow_sf %>%
-  dplyr::filter(Depth_Class == "B", Month == "September")
-
-shift_bottom_sf <- bottom_sf
-
-st_geometry(shift_bottom_sf) <- st_geometry(bottom_sf) + c(.06,-.03)
-
-shift_bottom_sf <- st_set_crs(shift_bottom_sf, st_crs(bottom_sf))
-
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S", Month == "September") %>%
-  ggplot() + 
-  geom_sf(data = shift_bottom_sf, aes(color = avg_cells_per_ml), size = 5, alpha = 1) + 
-  geom_sf(aes(color = avg_cells_per_ml), size = 5, alpha = 1) + 
-  scale_color_distiller(palette = "Spectral", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Total cells/ml")
+meta_w_flow %>%
+  ggplot(aes(x = total_chl_counts, y = avg_cells_per_ml - total_chl_counts)) + 
+  geom_point() + 
+  scale_y_log10() + 
+  scale_x_log10() + 
+  ggpubr::stat_cor(method = "spearman")
 ```
 
 ::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/cells-spatial-2.png){fig-align='center' width=2100}
+![](../figures/06_Flow_Cytometry/unnamed-chunk-4-2.png){fig-align='center' width=2100}
 :::
 :::
 
 ::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Month == "September", Depth_Class == "S") %>%
-  ggplot() + 
-  geom_sf(data = shift_bottom_sf, aes(color = rsg_pos_per_ml), size = 5, alpha = 1) + 
-  geom_sf(aes(color = rsg_pos_per_ml), size = 5, alpha = 1) + 
-  scale_color_distiller(palette = "Spectral", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "RSG+/ml")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/rsg-spatial-1.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Month == "September", Depth_Class == "S") %>%
-  ggplot() + 
-  geom_sf(data = shift_bottom_sf, aes(color = rsg_perc_pos), size = 5, alpha = 1) + 
-  geom_sf(aes(color = rsg_perc_pos), size = 5, alpha = 1) + 
-  scale_color_distiller(palette = "Spectral", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "% RSG+")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/rsg-spatial-2.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Month == "September", Depth_Class == "S") %>%
-  ggplot() + 
-  geom_sf(data = shift_bottom_sf, aes(color = rsg_mfi), size = 5, alpha = 1) + 
-  geom_sf(aes(color = rsg_mfi), size = 5, alpha = 1) + 
-  scale_color_distiller(palette = "Spectral", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "RSG Intensity")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/rsg-spatial-3.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Month == "September", Depth_Class == "S") %>%
-  ggplot() + 
-  geom_sf(data = shift_bottom_sf, aes(color = rsg_mfi), size = 5, alpha = 1) + 
-  geom_sf(aes(color = total_chl_counts), size = 5, alpha = 1) + 
-  scale_color_distiller(palette = "PRGn", na.value = "white", direction = 1) + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Total Chl+")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/rsg-spatial-4.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Month == "September", Depth_Class == "S") %>%
-  ggplot() + 
-  geom_sf(data = shift_bottom_sf, aes(color = rsg_mfi), size = 5, alpha = 1) + 
-  geom_sf(aes(color = pig_counts_chl_big), size = 5, alpha = 1) + 
-  scale_color_distiller(palette = "PRGn", na.value = "white", direction = 1) + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Big Chl+")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/rsg-spatial-5.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Month == "September", Depth_Class == "S") %>%
-  ggplot() + 
-  geom_sf(data = shift_bottom_sf, aes(color = rsg_mfi), size = 5, alpha = 1) + 
-  geom_sf(aes(color = pig_counts_chl_small), size = 5, alpha = 1) + 
-  scale_color_distiller(palette = "PRGn", na.value = "white", direction = 1) + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Small Chl+")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/rsg-spatial-6.png){fig-align='center' width=2100}
-:::
-:::
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = total_chl_counts), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "green", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA)
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/total-chl-spatial-1.png){fig-align='center' width=2100}
-:::
-:::
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = pig_counts_low_chl_no_pe), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "green", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Low Chl, No PE")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/pig-types-spatial-1.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = pig_counts_high_chl_no_pe), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "green", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "High Chl, No PE")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/pig-types-spatial-2.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = pig_counts_high_chl_high_pe), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "green", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "High PE")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/pig-types-spatial-3.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = pig_counts_chl_big), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(transform = "log10", low = "blue", high = "green", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Big Chl")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/pig-types-spatial-4.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = pig_counts_chl_small), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "green", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Small Chl")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/pig-types-spatial-5.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = pig_counts_chl_big / avg_cells_per_ml), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "orange", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Big Chl % of Total Community")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/pig-types-spatial-6.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = pig_counts_chl_big / total_chl_counts), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "orange", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Big Chl % of Phototrophs")
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/pig-types-spatial-7.png){fig-align='center' width=2100}
-:::
-:::
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = Water_Surface_Temp_C), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "red", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA)
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/surface-temp-spatial-1.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S",
-                Month == "September") %>%
-  ggplot() + 
-  geom_sf(aes(color = Water_Surface_Temp_C), size = 3, alpha = 0.7) + 
-  scale_color_gradient(low = "blue", high = "red", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA)
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/surface-temp-spatial-2.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S",
-                Month == "August") %>%
-  ggplot() + 
-  geom_sf(aes(color = Water_Surface_Temp_C), size = 3, alpha = 0.7) + 
-  scale_color_gradient(low = "blue", high = "red", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA)
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/surface-temp-spatial-3.png){fig-align='center' width=2100}
-:::
-:::
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "B") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = Water_Surface_Temp_C), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "red", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA)
-```
-
-::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/bottom-temp-spatial-1.png){fig-align='center' width=2100}
-:::
-:::
-
-
-# Write-out objects
-
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-grouped <- sample_info_w_flow %>%
-  dplyr::filter(!is.na(avg_cells_per_ml)) %>%
-  select(-Sample_ID, -Notes) %>%
-  group_by(across(!where(is.numeric))) %>%
-  summarize(across(where(is.numeric), mean)) %>%
-  ungroup() %>%
-  group_by(Month, Depth_Class)
-
-split <- grouped %>%
-  group_split() %>%
-  map(\(x)st_as_sf(x, coords = c("Longitude","Latitude"), crs = "EPSG:4326"))
-
-names(split) <- group_keys(grouped) %>%
-  mutate(Name = paste("Sample_Flow",Month, Depth_Class, sep = "_")) %>%
-  pull(Name)
-
-
-map2(split, names(split),
-     \(x,y){
-       st_write(x, paste0("analysis/QGIS_Work/", y, ".gpkg"), append = FALSE)
-     })
-```
-:::
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-save(sample_info_w_flow, file = "data/06_Flow_Cytometry/sample_info_w_flow.RData")
-```
-
-::: {.cell-output .cell-output-error}
-```
-Error in `save()`:
-! object 'sample_info_w_flow' not found
-```
-:::
 
 ```{.r .cell-code}
 save(flow_physeq, file ="data/06_Flow_Cytometry/flow_physeq.RData")
-
-load("data/04a_Eukaryotic_TreeBuilding/tree_euk_physeq.RData")
-
-euk_flow_physeq <- tree_euk_physeq
-
-euk_flow_physeq@sam_data <- NULL
-
-euk_flow_physeq@sam_data <- sample_data(meta_w_flow)
-
-save(euk_flow_physeq, file ="data/06_Flow_Cytometry/euk_flow_physeq.RData")
 ```
 :::
 
@@ -2937,195 +1734,167 @@ devtools::session_info()
 ─ Session info ───────────────────────────────────────────────────────────────
  setting  value
  version  R version 4.3.3 (2024-02-29)
- os       Rocky Linux 9.5 (Blue Onyx)
+ os       Rocky Linux 9.8 (Blue Onyx)
  system   x86_64, linux-gnu
  ui       X11
  language (EN)
  collate  en_US.UTF-8
  ctype    en_US.UTF-8
  tz       America/New_York
- date     2026-05-06
+ date     2026-10-12
  pandoc   3.1.1 @ /usr/lib/rstudio-server/bin/quarto/bin/tools/ (via rmarkdown)
- quarto   1.3.450 @ /usr/lib/rstudio-server/bin/quarto/bin/quarto
 
 ─ Packages ───────────────────────────────────────────────────────────────────
- ! package          * version    date (UTC) lib source
-   abind              1.4-8      2024-09-12 [1] RSPM (R 4.3.3)
-   ade4               1.7-23     2025-02-14 [1] RSPM (R 4.3.3)
-   ape                5.8-1      2024-12-16 [1] RSPM (R 4.3.3)
-   backports          1.5.0      2024-05-23 [1] RSPM (R 4.3.3)
-   base64enc          0.1-6      2026-02-02 [1] RSPM (R 4.3.3)
- P beeswarm           0.4.0      2021-06-01 [?] CRAN (R 4.3.2)
-   BH               * 1.90.0-1   2025-12-14 [1] RSPM (R 4.3.3)
-   Biobase            2.62.0     2023-10-24 [1] Bioconductor
-   BiocGenerics       0.48.1     2023-11-01 [1] Bioconductor
-   BiocManager        1.30.27    2025-11-14 [1] RSPM (R 4.3.3)
-   biomformat         1.30.0     2023-10-24 [1] Bioconductor
-   Biostrings         2.70.3     2024-03-13 [1] Bioconductor 3.18 (R 4.3.3)
-   bit                4.6.0      2025-03-06 [1] RSPM (R 4.3.3)
-   bit64              4.6.0-1    2025-01-16 [1] RSPM (R 4.3.3)
-   bitops             1.0-9      2024-10-03 [1] RSPM (R 4.3.3)
-   broom              1.0.12     2026-01-27 [1] RSPM (R 4.3.3)
-   cachem             1.1.0      2024-05-16 [1] RSPM (R 4.3.3)
-   car                3.1-5      2026-02-03 [1] RSPM (R 4.3.3)
-   carData            3.0-6      2026-01-30 [1] RSPM (R 4.3.3)
-   class              7.3-23     2025-01-01 [1] RSPM (R 4.3.3)
-   classInt           0.4-11     2025-01-08 [1] RSPM (R 4.3.3)
-   cli                3.6.5      2025-04-23 [1] RSPM (R 4.3.3)
-   cluster            2.1.8.2    2026-02-05 [1] RSPM (R 4.3.3)
-   codetools          0.2-20     2024-03-31 [1] RSPM (R 4.3.3)
-   colorspace         2.1-2      2025-09-22 [1] RSPM (R 4.3.3)
-   cols4all           0.10       2025-10-27 [1] RSPM (R 4.3.3)
-   crayon             1.5.3      2024-06-20 [1] RSPM (R 4.3.3)
-   crosstalk          1.2.2      2025-08-26 [1] RSPM (R 4.3.3)
-   cytolib            2.19.3     2026-03-18 [1] Github (RGLab/cytolib@1f886d9)
-   data.table         1.18.2.1   2026-01-27 [1] RSPM (R 4.3.3)
-   DBI                1.3.0      2026-02-25 [1] RSPM (R 4.3.3)
-   devtools           2.5.0      2026-03-14 [1] RSPM (R 4.3.3)
-   dichromat          2.0-0.1    2022-05-02 [1] RSPM (R 4.3.3)
-   digest             0.6.39     2025-11-19 [1] RSPM (R 4.3.3)
-   dplyr            * 1.2.0      2026-02-03 [1] RSPM (R 4.3.3)
-   e1071              1.7-17     2025-12-18 [1] RSPM (R 4.3.3)
- P ellipsis           0.3.2      2021-04-29 [?] CRAN (R 4.3.2)
-   evaluate           1.0.5      2025-08-27 [1] RSPM (R 4.3.3)
-   farver             2.1.2      2024-05-13 [1] RSPM (R 4.3.3)
-   fastmap            1.2.0      2024-05-15 [1] RSPM (R 4.3.3)
- P flow.gus         * 0.1.2      2025-11-17 [?] Github (MarschmiLab/flow.gus@7a84aee)
-   flowCore         * 2.23.1     2026-03-18 [1] Github (RGLab/flowCore@4f0009e)
-   flowWorkspace    * 4.14.3     2024-03-18 [1] Bioconductor 3.18 (R 4.3.3)
-   FNN                1.1.4.1    2024-09-22 [1] RSPM (R 4.3.3)
-   forcats          * 1.0.1      2025-09-25 [1] RSPM (R 4.3.3)
-   foreach            1.5.2      2022-02-02 [1] RSPM (R 4.3.3)
-   Formula            1.2-5      2023-02-24 [1] RSPM (R 4.3.3)
-   fs                 1.6.7      2026-03-06 [1] RSPM (R 4.3.3)
-   generics           0.1.4      2025-05-09 [1] RSPM (R 4.3.3)
-   GenomeInfoDb       1.38.8     2024-03-15 [1] Bioconductor 3.18 (R 4.3.3)
-   GenomeInfoDbData   1.2.11     2025-04-11 [1] Bioconductor
-   ggbeeswarm         0.7.3      2025-11-29 [1] RSPM (R 4.3.3)
-   ggcyto           * 1.39.3     2026-03-18 [1] Github (RGLab/ggcyto@3e26b15)
-   ggplot2          * 4.0.2      2026-02-03 [1] RSPM (R 4.3.3)
-   ggpubr           * 0.6.3      2026-02-24 [1] RSPM (R 4.3.3)
-   ggsignif           0.6.4      2022-10-13 [1] RSPM (R 4.3.3)
-   glue               1.8.0      2024-09-30 [1] RSPM (R 4.3.3)
-   graph              1.80.0     2023-10-24 [1] Bioconductor
-   gridExtra          2.3        2017-09-09 [1] RSPM (R 4.3.3)
-   gstat            * 2.1-5      2026-02-13 [1] RSPM (R 4.3.3)
-   gtable             0.3.6      2024-10-25 [1] RSPM (R 4.3.3)
-   hexbin             1.28.5     2024-11-13 [1] RSPM (R 4.3.3)
-   hms                1.1.4      2025-10-17 [1] RSPM (R 4.3.3)
-   htmltools          0.5.9      2025-12-04 [1] RSPM (R 4.3.3)
- P htmlwidgets        1.6.4      2023-12-06 [?] CRAN (R 4.3.2)
-   httpuv             1.6.16     2025-04-16 [1] RSPM (R 4.3.3)
-   igraph             2.2.2      2026-02-12 [1] RSPM (R 4.3.3)
-   intervals          0.15.5     2024-08-23 [1] RSPM (R 4.3.3)
-   IRanges            2.36.0     2023-10-24 [1] Bioconductor
-   iterators          1.0.14     2022-02-05 [1] RSPM (R 4.3.3)
-   jsonlite           2.0.0      2025-03-27 [1] RSPM (R 4.3.3)
-   KernSmooth         2.23-26    2025-01-01 [1] RSPM (R 4.3.3)
-   knitr              1.51       2025-12-20 [1] RSPM (R 4.3.3)
-   labeling           0.4.3      2023-08-29 [1] RSPM (R 4.3.3)
-   later              1.4.8      2026-03-05 [1] RSPM (R 4.3.3)
-   lattice            0.22-9     2026-02-09 [1] RSPM (R 4.3.3)
-   leafem             0.2.5      2025-08-28 [1] RSPM (R 4.3.3)
-   leaflegend         1.2.1      2024-05-09 [1] RSPM (R 4.3.3)
-   leaflet            2.2.3      2025-09-04 [1] RSPM (R 4.3.3)
-   leafsync           0.1.0      2019-03-05 [1] RSPM (R 4.3.3)
-   lifecycle          1.0.5      2026-01-08 [1] RSPM (R 4.3.3)
-   logger             0.4.1      2025-09-11 [1] RSPM (R 4.3.3)
-   lubridate        * 1.9.5      2026-02-04 [1] RSPM (R 4.3.3)
-   lwgeom             0.2-15     2026-01-12 [1] RSPM (R 4.3.3)
-   magrittr           2.0.4      2025-09-12 [1] RSPM (R 4.3.3)
-   maptiles           0.11.0     2025-12-12 [1] RSPM (R 4.3.3)
- P MASS               7.3-60.0.1 2024-01-13 [?] CRAN (R 4.3.3)
- P Matrix             1.6-5      2024-01-11 [?] CRAN (R 4.3.3)
-   matrixStats        1.5.0      2025-01-07 [1] RSPM (R 4.3.3)
-   memoise            2.0.1      2021-11-26 [1] RSPM (R 4.3.3)
- P mgcv               1.9-1      2023-12-21 [?] CRAN (R 4.3.3)
-   microbenchmark     1.5.0      2024-09-04 [1] RSPM (R 4.3.3)
-   mime               0.13       2025-03-17 [1] RSPM (R 4.3.3)
-   multtest           2.58.0     2023-10-24 [1] Bioconductor
- P NatParksPalettes   0.2.0      2022-10-09 [?] CRAN (R 4.3.2)
-   ncdfFlow         * 2.48.0     2023-10-24 [1] Bioconductor
-   nlme               3.1-168    2025-03-31 [1] RSPM (R 4.3.3)
-   otel               0.2.0      2025-08-29 [1] RSPM (R 4.3.3)
- P pacman             0.5.1      2019-03-11 [?] CRAN (R 4.3.2)
-   permute            0.9-10     2026-02-06 [1] RSPM (R 4.3.3)
-   phyloseq         * 1.46.0     2023-10-24 [1] Bioconductor
-   pillar             1.11.1     2025-09-17 [1] RSPM (R 4.3.3)
-   pkgbuild           1.4.8      2025-05-26 [1] RSPM (R 4.3.3)
-   pkgconfig          2.0.3      2019-09-22 [1] RSPM (R 4.3.3)
-   pkgload            1.5.0      2026-02-03 [1] RSPM (R 4.3.3)
-   plyr               1.8.9      2023-10-02 [1] RSPM (R 4.3.3)
-   png                0.1-9      2026-03-15 [1] RSPM (R 4.3.3)
-   promises           1.5.0      2025-11-01 [1] RSPM (R 4.3.3)
-   proxy              0.4-29     2025-12-29 [1] RSPM (R 4.3.3)
-   purrr            * 1.2.1      2026-01-09 [1] RSPM (R 4.3.3)
-   R6                 2.6.1      2025-02-15 [1] RSPM (R 4.3.3)
-   ragg               1.5.1      2026-03-06 [1] RSPM (R 4.3.3)
-   raster             3.6-32     2025-03-28 [1] RSPM (R 4.3.3)
-   RColorBrewer       1.1-3      2022-04-03 [1] RSPM (R 4.3.3)
-   Rcpp               1.1.1      2026-01-10 [1] RSPM (R 4.3.3)
-   RCurl              1.98-1.17  2025-03-22 [1] RSPM (R 4.3.3)
-   readr            * 2.2.0      2026-02-19 [1] RSPM (R 4.3.3)
-   renv               1.1.8      2026-03-05 [1] RSPM (R 4.3.3)
-   reshape2           1.4.5      2025-11-12 [1] RSPM (R 4.3.3)
-   Rgraphviz          2.46.0     2023-10-24 [1] Bioconductor
-   rhdf5              2.46.1     2023-11-29 [1] Bioconductor 3.18 (R 4.3.3)
-   rhdf5filters       1.14.1     2023-11-06 [1] Bioconductor
-   Rhdf5lib           1.24.2     2024-02-07 [1] Bioconductor 3.18 (R 4.3.3)
-   rlang              1.1.7      2026-01-09 [1] RSPM (R 4.3.3)
-   rmarkdown          2.30       2025-09-28 [1] RSPM (R 4.3.3)
-   RProtoBufLib       2.13.1     2026-03-18 [1] Github (RGLab/RProtoBufLib@e3138e7)
-   rstatix            0.7.3      2025-10-18 [1] RSPM (R 4.3.3)
-   rstudioapi         0.18.0     2026-01-16 [1] RSPM (R 4.3.3)
-   s2                 1.1.9      2025-05-23 [1] RSPM (R 4.3.3)
-   S4Vectors          0.40.2     2023-11-23 [1] Bioconductor 3.18 (R 4.3.3)
-   S7                 0.2.1      2025-11-14 [1] RSPM (R 4.3.3)
-   scales             1.4.0      2025-04-24 [1] RSPM (R 4.3.3)
- P sessioninfo        1.2.3      2025-02-05 [?] RSPM (R 4.3.3)
-   sf               * 1.1-0      2026-02-24 [1] RSPM (R 4.3.3)
-   shiny              1.13.0     2026-02-20 [1] RSPM (R 4.3.3)
-   sp                 2.2-1      2026-02-13 [1] RSPM (R 4.3.3)
-   spacesXYZ          1.6-0      2025-06-06 [1] RSPM (R 4.3.3)
-   spacetime          1.3-3      2025-02-13 [1] RSPM (R 4.3.3)
-   stars              0.7-1      2026-02-13 [1] RSPM (R 4.3.3)
-   stringi            1.8.7      2025-03-27 [1] RSPM (R 4.3.3)
-   stringr          * 1.6.0      2025-11-04 [1] RSPM (R 4.3.3)
-   survival           3.8-6      2026-01-16 [1] RSPM (R 4.3.3)
-   systemfonts        1.3.2      2026-03-05 [1] RSPM (R 4.3.3)
-   terra            * 1.9-1      2026-03-08 [1] RSPM (R 4.3.3)
-   textshaping        1.0.5      2026-03-06 [1] RSPM (R 4.3.3)
-   tibble           * 3.3.1      2026-01-11 [1] RSPM (R 4.3.3)
-   tidyr            * 1.3.2      2025-12-19 [1] RSPM (R 4.3.3)
-   tidyselect         1.2.1      2024-03-11 [1] RSPM (R 4.3.3)
-   tidyverse        * 2.0.0      2023-02-22 [1] RSPM (R 4.3.0)
-   timechange         0.4.0      2026-01-29 [1] RSPM (R 4.3.3)
-   tmap             * 4.2        2025-09-10 [1] RSPM (R 4.3.3)
-   tmaptools          3.3        2025-07-24 [1] RSPM (R 4.3.3)
-   tzdb               0.5.0      2025-03-15 [1] RSPM (R 4.3.3)
-   units              1.0-1      2026-03-11 [1] RSPM (R 4.3.3)
-   usethis            3.2.1      2025-09-06 [1] RSPM (R 4.3.3)
-   utf8               1.2.6      2025-06-08 [1] RSPM (R 4.3.3)
-   vctrs              0.7.1      2026-01-23 [1] RSPM (R 4.3.3)
-   vegan              2.7-3      2026-03-04 [1] RSPM (R 4.3.3)
- P vipor              0.4.7      2023-12-18 [?] CRAN (R 4.3.2)
-   vroom              1.7.0      2026-01-27 [1] RSPM (R 4.3.3)
-   withr              3.0.2      2024-10-28 [1] RSPM (R 4.3.3)
-   wk                 0.9.5      2025-12-18 [1] RSPM (R 4.3.3)
- P xfun               0.56       2026-01-18 [?] RSPM (R 4.3.3)
-   XML                3.99-0.22  2026-02-10 [1] RSPM (R 4.3.3)
-   xtable             1.8-8      2026-02-22 [1] RSPM (R 4.3.3)
-   xts                0.14.2     2026-02-28 [1] RSPM (R 4.3.3)
-   XVector            0.42.0     2023-10-24 [1] Bioconductor
-   yaml               2.3.12     2025-12-10 [1] RSPM (R 4.3.3)
-   zlibbioc           1.48.2     2024-03-13 [1] Bioconductor 3.18 (R 4.3.3)
-   zoo                1.8-15     2025-12-15 [1] RSPM (R 4.3.3)
+ package          * version    date (UTC) lib source
+ abind              1.4-8      2024-09-12 [2] CRAN (R 4.3.3)
+ ade4               1.7-24     2026-03-21 [1] CRAN (R 4.3.3)
+ ape                5.8-1      2024-12-16 [1] CRAN (R 4.3.3)
+ backports          1.5.1      2026-04-03 [1] CRAN (R 4.3.3)
+ beeswarm           0.4.0      2021-06-01 [1] CRAN (R 4.3.3)
+ BH               * 1.90.0-1   2025-12-14 [1] CRAN (R 4.3.3)
+ Biobase            2.62.0     2023-10-24 [2] Bioconductor
+ BiocGenerics       0.48.1     2023-11-01 [2] Bioconductor
+ biomformat         1.30.0     2023-10-24 [1] Bioconductor
+ Biostrings         2.70.3     2024-03-13 [1] Bioconductor 3.18 (R 4.3.2)
+ bit                4.5.0      2024-09-20 [2] CRAN (R 4.3.3)
+ bit64              4.5.2      2024-09-22 [2] CRAN (R 4.3.3)
+ bitops             1.0-9      2024-10-03 [2] CRAN (R 4.3.3)
+ broom              1.0.13     2026-05-14 [1] CRAN (R 4.3.3)
+ cachem             1.1.0      2024-05-16 [2] CRAN (R 4.3.3)
+ car                3.1-5      2026-02-03 [1] CRAN (R 4.3.3)
+ carData            3.0-6      2026-01-30 [1] CRAN (R 4.3.3)
+ class              7.3-22     2023-05-03 [2] CRAN (R 4.3.3)
+ classInt           0.4-11     2025-01-08 [2] CRAN (R 4.3.3)
+ cli                3.6.6      2026-04-09 [1] CRAN (R 4.3.3)
+ cluster            2.1.6      2023-12-01 [2] CRAN (R 4.3.3)
+ codetools          0.2-19     2023-02-01 [2] CRAN (R 4.3.3)
+ crayon             1.5.3      2024-06-20 [2] CRAN (R 4.3.3)
+ cytolib            2.14.1     2024-01-18 [1] Bioconductor 3.18 (R 4.3.3)
+ data.table         1.18.6.1   2026-08-24 [1] CRAN (R 4.3.3)
+ DBI                1.2.3      2024-06-02 [2] CRAN (R 4.3.3)
+ devtools           2.4.5      2022-10-11 [2] CRAN (R 4.3.3)
+ digest             0.6.37     2024-08-19 [2] CRAN (R 4.3.3)
+ dplyr            * 1.2.1      2026-04-03 [1] CRAN (R 4.3.3)
+ e1071              1.7-17     2025-12-18 [2] CRAN (R 4.3.3)
+ ellipsis           0.3.2      2021-04-29 [2] CRAN (R 4.3.3)
+ evaluate           1.0.1      2024-10-10 [2] CRAN (R 4.3.3)
+ farver             2.1.2      2024-05-13 [2] CRAN (R 4.3.3)
+ fastmap            1.2.0      2024-05-15 [2] CRAN (R 4.3.3)
+ flow.gus         * 0.1.2      2026-10-07 [1] Github (MarschmiLab/flow.gus@7a84aee)
+ flowCore         * 2.14.2     2024-03-18 [1] Bioconductor 3.18 (R 4.3.3)
+ flowWorkspace    * 4.14.3     2024-03-18 [1] Bioconductor 3.18 (R 4.3.3)
+ forcats          * 1.0.1      2025-09-25 [1] CRAN (R 4.3.3)
+ foreach            1.5.2      2022-02-02 [1] CRAN (R 4.3.3)
+ Formula            1.2-6      2026-08-03 [1] CRAN (R 4.3.3)
+ fs                 1.6.5      2024-10-30 [2] CRAN (R 4.3.3)
+ generics           0.1.4      2025-05-09 [1] CRAN (R 4.3.3)
+ GenomeInfoDb       1.38.8     2024-03-15 [2] Bioconductor 3.18 (R 4.3.3)
+ GenomeInfoDbData   1.2.11     2024-11-25 [2] Bioconductor
+ ggbeeswarm         0.7.3      2025-11-29 [1] CRAN (R 4.3.3)
+ ggcyto           * 1.30.2     2024-03-03 [1] Bioconductor 3.18 (R 4.3.3)
+ ggplot2          * 3.5.2      2025-04-09 [1] CRAN (R 4.3.3)
+ ggpubr           * 1.0.0      2026-07-06 [1] CRAN (R 4.3.3)
+ ggsignif           0.6.4      2022-10-13 [1] CRAN (R 4.3.3)
+ glue               1.8.1      2026-04-17 [1] CRAN (R 4.3.3)
+ graph              1.80.0     2023-10-24 [2] Bioconductor
+ gridExtra          2.3.1      2026-06-25 [1] CRAN (R 4.3.3)
+ gtable             0.3.6      2024-10-25 [2] CRAN (R 4.3.3)
+ hexbin             1.28.6     2026-07-28 [1] CRAN (R 4.3.3)
+ hms                1.1.4      2025-10-17 [1] CRAN (R 4.3.3)
+ htmltools          0.5.8.1    2024-04-04 [2] CRAN (R 4.3.3)
+ htmlwidgets        1.6.4      2023-12-06 [2] CRAN (R 4.3.3)
+ httpuv             1.6.15     2024-03-26 [2] CRAN (R 4.3.3)
+ igraph             2.1.1      2024-10-19 [2] CRAN (R 4.3.3)
+ IRanges            2.36.0     2023-10-24 [2] Bioconductor
+ iterators          1.0.14     2022-02-05 [1] CRAN (R 4.3.3)
+ jsonlite           1.8.9      2024-09-20 [2] CRAN (R 4.3.3)
+ KernSmooth         2.23-22    2023-07-10 [2] CRAN (R 4.3.3)
+ knitr              1.52       2026-09-06 [1] CRAN (R 4.3.3)
+ labeling           0.4.3      2023-08-29 [2] CRAN (R 4.3.3)
+ later              1.3.2      2023-12-06 [2] CRAN (R 4.3.3)
+ lattice            0.22-5     2023-10-24 [2] CRAN (R 4.3.3)
+ lifecycle          1.0.5      2026-01-08 [1] CRAN (R 4.3.3)
+ lubridate        * 1.9.5      2026-02-04 [1] CRAN (R 4.3.3)
+ magrittr           2.0.5      2026-04-04 [1] CRAN (R 4.3.3)
+ MASS               7.3-60.0.1 2024-01-13 [2] CRAN (R 4.3.3)
+ Matrix             1.6-5      2024-01-11 [2] CRAN (R 4.3.3)
+ matrixStats        1.5.0      2025-01-07 [1] CRAN (R 4.3.3)
+ memoise            2.0.1      2021-11-26 [2] CRAN (R 4.3.3)
+ mgcv               1.9-1      2023-12-21 [2] CRAN (R 4.3.3)
+ mime               0.12       2021-09-28 [2] CRAN (R 4.3.3)
+ miniUI             0.1.1.1    2018-05-18 [2] CRAN (R 4.3.3)
+ multtest           2.58.0     2023-10-24 [1] Bioconductor
+ NatParksPalettes   0.2.0      2022-10-09 [1] CRAN (R 4.3.3)
+ ncdfFlow         * 2.48.0     2023-10-24 [1] Bioconductor
+ nlme               3.1-164    2023-11-27 [2] CRAN (R 4.3.3)
+ otel               0.2.0      2025-08-29 [1] CRAN (R 4.3.3)
+ pacman             0.5.1      2019-03-11 [1] CRAN (R 4.3.2)
+ permute            0.9-10     2026-02-06 [1] CRAN (R 4.3.3)
+ phyloseq         * 1.46.0     2023-10-24 [1] Bioconductor
+ pillar             1.11.1     2025-09-17 [1] CRAN (R 4.3.3)
+ pkgbuild           1.4.5      2024-10-28 [2] CRAN (R 4.3.3)
+ pkgconfig          2.0.3      2019-09-22 [2] CRAN (R 4.3.3)
+ pkgload            1.4.0      2024-06-28 [2] CRAN (R 4.3.3)
+ plyr               1.8.9      2023-10-02 [2] CRAN (R 4.3.3)
+ profvis            0.4.0      2024-09-20 [2] CRAN (R 4.3.3)
+ promises           1.3.0      2024-04-05 [2] CRAN (R 4.3.3)
+ proxy              0.4-29     2025-12-29 [2] CRAN (R 4.3.3)
+ purrr            * 1.2.2      2026-04-10 [1] CRAN (R 4.3.3)
+ R6                 2.6.1      2025-02-15 [1] CRAN (R 4.3.3)
+ ragg               1.3.3      2024-09-11 [2] CRAN (R 4.3.3)
+ RColorBrewer       1.1-3      2022-04-03 [2] CRAN (R 4.3.3)
+ Rcpp               1.1.2      2026-07-05 [1] CRAN (R 4.3.3)
+ RCurl              1.98-1.16  2024-07-11 [2] CRAN (R 4.3.3)
+ readr            * 2.2.0      2026-02-19 [1] CRAN (R 4.3.3)
+ remotes            2.5.0      2024-03-17 [2] CRAN (R 4.3.3)
+ reshape2           1.4.4      2020-04-09 [2] CRAN (R 4.3.3)
+ Rgraphviz          2.46.0     2023-10-24 [1] Bioconductor
+ rhdf5              2.46.1     2023-11-29 [1] Bioconductor 3.18 (R 4.3.2)
+ rhdf5filters       1.14.1     2023-11-06 [1] Bioconductor
+ Rhdf5lib           1.24.2     2024-02-07 [1] Bioconductor 3.18 (R 4.3.2)
+ rlang              1.3.0      2026-07-05 [1] CRAN (R 4.3.3)
+ rmarkdown          2.32       2026-09-01 [1] CRAN (R 4.3.3)
+ RProtoBufLib       2.14.1     2024-03-18 [1] Bioconductor 3.18 (R 4.3.3)
+ rstatix            1.1.0      2026-07-23 [1] CRAN (R 4.3.3)
+ rstudioapi         0.17.1     2024-10-22 [2] CRAN (R 4.3.3)
+ s2                 1.1.11     2026-06-01 [2] CRAN (R 4.3.3)
+ S4Vectors          0.40.2     2023-11-23 [2] Bioconductor 3.18 (R 4.3.3)
+ S7                 0.2.2      2026-04-22 [1] CRAN (R 4.3.3)
+ scales             1.4.0      2025-04-24 [1] CRAN (R 4.3.3)
+ sessioninfo        1.2.2      2021-12-06 [2] CRAN (R 4.3.3)
+ sf               * 1.1-3      2026-09-11 [1] CRAN (R 4.3.3)
+ shiny              1.9.1      2024-08-01 [2] CRAN (R 4.3.3)
+ stringi            1.8.4      2024-05-06 [2] CRAN (R 4.3.3)
+ stringr          * 1.5.1      2023-11-14 [2] CRAN (R 4.3.3)
+ survival           3.5-8      2024-02-14 [2] CRAN (R 4.3.3)
+ systemfonts        1.3.2      2026-03-05 [1] CRAN (R 4.3.3)
+ terra            * 1.9-50     2026-09-08 [1] CRAN (R 4.3.3)
+ textshaping        0.4.0      2024-05-24 [2] CRAN (R 4.3.3)
+ tibble           * 3.3.1      2026-01-11 [1] CRAN (R 4.3.3)
+ tidyr            * 1.3.2      2025-12-19 [1] CRAN (R 4.3.3)
+ tidyselect         1.2.1      2024-03-11 [1] CRAN (R 4.3.2)
+ tidyverse        * 2.0.0      2023-02-22 [1] CRAN (R 4.3.2)
+ timechange         0.4.0      2026-01-29 [1] CRAN (R 4.3.3)
+ tzdb               0.5.0      2025-03-15 [1] CRAN (R 4.3.3)
+ units              1.0-1      2026-03-11 [2] CRAN (R 4.3.3)
+ urlchecker         1.0.1      2021-11-30 [2] CRAN (R 4.3.3)
+ usethis            3.2.2      2026-09-10 [1] CRAN (R 4.3.3)
+ utf8               1.2.6      2025-06-08 [1] CRAN (R 4.3.3)
+ vctrs              0.7.3      2026-04-11 [1] CRAN (R 4.3.3)
+ vegan              2.7-6      2026-08-31 [1] CRAN (R 4.3.3)
+ vipor              0.4.7      2023-12-18 [1] CRAN (R 4.3.3)
+ vroom              1.7.1      2026-03-31 [1] CRAN (R 4.3.3)
+ withr              3.0.3      2026-06-19 [1] CRAN (R 4.3.3)
+ wk                 0.9.5      2025-12-18 [2] CRAN (R 4.3.3)
+ xfun               0.61       2026-09-16 [1] CRAN (R 4.3.3)
+ XML                3.99-0.25  2026-09-27 [1] CRAN (R 4.3.3)
+ xtable             1.8-4      2019-04-21 [2] CRAN (R 4.3.3)
+ XVector            0.42.0     2023-10-24 [2] Bioconductor
+ yaml               2.3.10     2024-07-26 [2] CRAN (R 4.3.3)
+ zlibbioc           1.48.2     2024-03-13 [2] Bioconductor 3.18 (R 4.3.3)
 
- [1] /local/workdir/arp277/AAM_ERI_2024/renv/library/R-4.3/x86_64-pc-linux-gnu
- [2] /home/arp277/.cache/R/renv/sandbox/R-4.3/x86_64-pc-linux-gnu/fd835031
-
- * ── Packages attached to the search path.
- P ── Loaded and on-disk path mismatch.
+ [1] /home/arp277/R/x86_64-pc-linux-gnu-library/4.3
+ [2] /programs/R-4.3.3/lib64/R/library
 
 ──────────────────────────────────────────────────────────────────────────────
 ```

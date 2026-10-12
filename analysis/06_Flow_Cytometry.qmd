@@ -17,14 +17,15 @@ editor_options:
 ```{r load-pack}
 # Load Packages
 
-# Installing flow.gus can be a pain!!! Here is what worked for me:
+# BiocManager::install("phyloseq", force = TRUE)
+# install.packages("ggpubr")
+# # Installing flow.gus can be a pain!!! Here is what worked for me:
 # remotes::install_github('RGLab/cytoinstaller', force=TRUE)
 # devtools::install_github("RGLab/RProtoBufLib")
 # devtools::install_github("RGLab/cytolib")
 # devtools::install_github("RGLab/flowCore")
 # devtools::install_github("RGLab/ggcyto")
-# renv::install("MarschmiLab/flow.gus")
-
+# devtools::install_github("MarschmiLab/flow.gus")
 pacman::p_load(ggpubr, phyloseq, flow.gus, flowCore, ggcyto, tidyverse,  install = FALSE)
 # load colors and shapes
 source("code/R/plotting_aesthetics.R")
@@ -92,39 +93,7 @@ Here I define two different gates. One is just a rectangle gate which includes e
 
 sybr_gate <- rectangleGate(filterId = "cell_gate", "BL1-H" = c(3000, 1.5e6), "SSC-H" = c(1, 1.5e6))
 
-poly_mat <- matrix(c(3000,3000, 3e5, 1.5e6, 1.5e6,
-                     1, 673, 1.5e6, 1.5e6, 1),
-                   ncol=2,nrow=5)
-
-colnames(poly_mat) <- c("BL1-H","SSC-H")
-
-poly_gate <- polygonGate(filterId="Exclude_LowSybr_BigSSC", .gate = poly_mat)
-
 ```
-
-## Plotting a random subset
-
-Now I'll plot a random subset from each plate, with my gates on top, to make sure nothing went catastrophic on a given plate.
-
-```{r random-cell-plots}
-
-set.seed(314)
-
-rand_cells <- map(cell_sets, sample, size = 8)
-
-map(rand_cells, \(f){
-  ggcyto(f, aes(x = "SSC-H", y = "BL1-H")) + 
-    geom_hex(bins = 100) + 
-    scale_x_logicle() + 
-    scale_y_logicle() + 
-    geom_gate(poly_gate, colour = "green")+
-    geom_gate(sybr_gate) +
-    theme(strip.text = element_text(size = 5))
-})
-
-```
-
-I'm conflicted on what to do about those high SSC, low SYBR cells. The red gate would include them, while the green gte would exclude them. For most samples, they're very rare, but then other samples are inexplicably high, and I don't find a common link between them (sediment turned up during sampling, big blooms, etc.). I think moving forward I'm going to dsregard them (use the exclusive gate) but it's good to keep it in mind.
 
 ## Calculating Cell Counts
 
@@ -145,7 +114,6 @@ Note: count_gated_events comes from flow.gus.
 ```{r counting-cells, results = "hide", message = "hide"}
 
 cell_counts_inclusive <- map(cell_sets, count_gated_events, sybr_gate)
-cell_counts_exclusive <- map(cell_sets, count_gated_events, poly_gate)
 
 # This function helps remove extra info from the filename
 # Will likely need to edit depending on how your files are named!
@@ -166,12 +134,9 @@ inclusive_df <-
   bind_rows() %>%
   mutate(gate = "inclusive")
 
-exclusive_df <- 
-  map2(cell_counts_exclusive, wellmaps, cleaning_counts) %>%
-  bind_rows() %>%
-  mutate(gate = "exclusive")
 
-cell_counts_full <- bind_rows(inclusive_df, exclusive_df) %>%
+
+cell_counts_full <- bind_rows(inclusive_df) %>%
   mutate(cells_per_ml = (gated / volume_sampled) * sybr_dilution * glut_dilution * manual_dilution * 1000)
 
 ```
@@ -187,43 +152,6 @@ cell_counts_full %>%
 
 ```
 
-We go back and measure this twice for both replicates - just to make sure! 
-
-```{r plotting-cells}
-
-cell_counts_full %>%
-  mutate(Month = str_extract(Sample_ID, "2024.."),
-         Depth_Class = str_extract(Sample_ID, "EW|BW")) %>%
-  ggplot(aes(x = Month, y = cells_per_ml, color = Depth_Class)) + 
-  geom_boxplot(position = position_dodge(width = 1)) + 
-  geom_jitter(position = position_dodge(width = 1)) + 
-  facet_wrap(~gate) + 
-  scale_y_continuous(labels = scales::label_comma())
-
-
-cell_counts_full %>%
-    mutate(Month = str_extract(Sample_ID, "2024.."),
-         Depth_Class = str_extract(Sample_ID, "EW|BW")) %>%
-  ggplot(aes(x = gate, y = cells_per_ml, group = sample, color = Depth_Class)) + 
-  geom_point() + 
-  geom_line() + 
-  scale_y_continuous(labels = scales::label_comma())
-
-
-```
-
-The inclusive gating usually doesn't matter...except for a few very special samples. I think for now, we're gonna avoid it, but will discuss with Marian. 
-Who are those crazy high outliers?
-
-```{r check-outliers}
-
-cell_counts_full %>%
-  arrange(desc(cells_per_ml)) %>% 
-  head(10)
-
-```
-
-I mean, peak August bloom! Seems reasonable. That September 22 also had a ton of Cyanobacteria there
 
 # Analyzing pigments
 
@@ -239,65 +167,11 @@ There's a lot of directions to go here, and I'm just tentatively starting. Here,
 
 ```{r define-pig-gates}
 
-low_chl_no_pe_gate <- rectangleGate(filterId = "chl_gate", "BL2-H" = c(1, 408), "BL3-H" = c(386, 5e3))
-no_chl_low_pe_gate <- rectangleGate(filterId = "pe_gate", "BL2-H" = c(407, 1.5e6), "BL3-H" = c(1, 386))
-
-
-high_chl_high_pe_mat <- 
-  matrix(c(408, 1e4, 1.5e6, 1.5e6, 1e5, 408,
-         386, 386, 1e5, 1.5e6, 1.5e6, 5e3),
-                   ncol=2,nrow=6)
-
-colnames(high_chl_high_pe_mat) <- c("BL2-H", "BL3-H")
-
-high_chl_high_pe_gate <- polygonGate(filterId="high_chl_high_pe", boundaries = high_chl_high_pe_mat)
-
-
-
-high_chl_no_pe_mat <- 
-  matrix(
-    c(1, 408, 1e5, 1,
-      5e3, 5e3, 1.5e6, 1.5e6),
-                   ncol=2,nrow=4)
-
-colnames(high_chl_no_pe_mat) <- c("BL2-H", "BL3-H")
-
-high_chl_no_pe_gate <- polygonGate(filterId="high_chl_no_pe", boundaries = high_chl_no_pe_mat)
-
 chl_big <- rectangleGate(filterId = "is_big", "BL3-H" = c(500, 1e7), "FSC-H" = c(1e5, 1e7))
 chl_small <- rectangleGate(filterId = "is_small", "BL3-H" = c(500, 1e7), "FSC-H" = c(100, 1e5))
 
 ```
 
-
-```{r random-pig-plots}
-
-set.seed(314)
-
-rand_pigment <- map(pigment_sets, sample, size = 8)
-
-map(rand_pigment, \(f){
-  ggcyto(f, aes(x = "BL2-H", y = "BL3-H")) + 
-    geom_hex(bins = 100) + 
-    scale_x_logicle() + 
-    scale_y_logicle() + 
-    geom_gate(low_chl_no_pe_gate, colour = "brown") +
-    geom_gate(no_chl_low_pe_gate, colour = "orange") + 
-    geom_gate(high_chl_high_pe_gate, colour = "purple") + 
-    geom_gate(high_chl_no_pe_gate, colour = "blue") + 
-    theme(strip.text = element_text(size = 5))
-})
-
-map(rand_pigment, \(f){
-  ggcyto(f, aes(x = "FSC-H", y = "BL3-H")) + 
-    geom_hex(bins = 100) + 
-    scale_x_logicle() + 
-    scale_y_logicle() + 
-    geom_gate(chl_big, colour = "brown") +
-    theme(strip.text = element_text(size = 5))
-})
-
-```
 
 ```{r defining-pig-dilutions}
 
@@ -311,18 +185,10 @@ Now, we count events in each of those pigment gates. Their edges are exclusive b
 
 ```{r counting-pigs, results = "hide", message = "hide"}
 
-pig_counts_low_chl_no_pe <- map(pigment_sets, count_gated_events, low_chl_no_pe_gate)
-pig_counts_no_chl_low_pe <- map(pigment_sets, count_gated_events, no_chl_low_pe_gate)
-pig_counts_high_chl_high_pe <- map(pigment_sets, count_gated_events, high_chl_high_pe_gate)
-pig_counts_high_chl_no_pe <- map(pigment_sets, count_gated_events, high_chl_no_pe_gate)
 pig_counts_chl_big <- map(pigment_sets, count_gated_events, chl_big)
 pig_counts_chl_small <- map(pigment_sets, count_gated_events, chl_small)
 
 pig_count_list <- list(
-  "pig_counts_low_chl_no_pe" = pig_counts_low_chl_no_pe,
-  "pig_counts_no_chl_low_pe" = pig_counts_no_chl_low_pe, 
-  "pig_counts_high_chl_high_pe" = pig_counts_high_chl_high_pe,
-  "pig_counts_high_chl_no_pe" = pig_counts_high_chl_no_pe,
   "pig_counts_chl_big" = pig_counts_chl_big,
   "pig_counts_chl_small" = pig_counts_chl_small)
 
@@ -403,28 +269,6 @@ het_rsg_gate <- rectangleGate(filterId = "rsg_het", "BL3-H" = c(1, 499),  "BL1-H
 
 ```
 
-## Plotting a random subset
-
-Now I'll plot a random subset from each plate, with my gates on top, to make sure nothing went catastrophic on a given plate.
-
-```{r rsg-random-cell-plots}
-
-set.seed(314)
-
-rsg_rand_cells <- map(rsg_sets, sample, size = 8)
-
-map(rsg_rand_cells, \(f){
-  ggcyto(f, aes(x = "SSC-H", y = "BL1-H")) + 
-    geom_hex(bins = 100) + 
-    scale_x_logicle() + 
-    scale_y_logicle() + 
-    geom_gate(rsg_gate) +
-    theme(strip.text = element_text(size = 5))
-})
-
-
-
-```
 
 ## Calculating Cell Counts
 
@@ -563,17 +407,7 @@ head(rsg_final)
 ## Quick QC
 
 ```{r rsg-qc}
-rsg_final %>%
-  separate_wider_delim(Sample_ID, delim = "_", names = c("x","y","z", "Station", "w", "Depth", "Replicate")) %>%
-  ggplot(aes(x = Depth, y = rsg_pos_per_ml, group = paste(Station, Replicate))) + 
-  geom_point() + 
-  geom_line()
 
-rsg_final %>%
-  separate_wider_delim(Sample_ID, delim = "_", names = c("x","y","z", "Station", "w", "Depth", "Replicate")) %>%
-  ggplot(aes(x = Depth, y = rsg_perc_pos, group = paste(Station, Replicate))) + 
-  geom_point() + 
-  geom_line()
 
 rsg_final %>%
   separate_wider_delim(Sample_ID, delim = "_", names = c("x","y","z", "Station", "w", "Depth", "Replicate")) %>%
@@ -634,7 +468,7 @@ rsg_final <- rsg_final %>%
 
 cells_for_join <- 
   cell_counts_full %>%
-  dplyr::filter(gate == "exclusive") %>%
+  dplyr::filter(gate == "inclusive") %>%
   group_by(Sample_ID) %>%
   summarize(avg_cells_per_ml = mean(cells_per_ml)) %>%
   ungroup() %>%
@@ -645,13 +479,6 @@ pig_final <-
   left_join(cells_for_join) %>% 
   left_join(rsg_final) %>% 
   mutate(perc_pig = avg_pig_per_ml / avg_cells_per_ml)
-
-pig_final %>%
-  mutate(diff = avg_cells_per_ml - rsg_total_per_ml) %>%
-  filter(!is.na(diff)) %>%
-  mutate(perc = diff / avg_cells_per_ml) %>%
-  pull(perc) %>%
-  median()
 
 ```
 
@@ -666,28 +493,6 @@ pig_final %>%
 
 ```
 
-Neat - I'm especially interested in the bimodal distribution for the high_chl_no_pe gate, trying to correlate those to taxonomy
-
-```{r plotting-pigs-compare_month_depth}
-
-pig_final %>%
-    mutate(Month = str_extract(Sample_ID, "2024.."),
-         Depth_Class = str_extract(Sample_ID, "EW|BW")) %>%
-  ggplot(aes(x = Month, y = avg_pig_per_ml, color = Depth_Class)) + 
-  geom_boxplot(position = position_dodge(width = 1)) + 
-  geom_jitter(position = position_dodge(width = 1)) + 
-  facet_wrap(~Gate) + 
-  scale_y_log10()
-
-pig_final %>%
-    mutate(Month = str_extract(Sample_ID, "2024.."),
-         Depth_Class = str_extract(Sample_ID, "EW|BW")) %>%
-  ggplot(aes(x = Month, y = perc_pig, color = Depth_Class)) + 
-  geom_boxplot(position = position_dodge(width = 1)) + 
-  geom_jitter(position = position_dodge(width = 1)) + 
-  facet_wrap(~Gate)
-
-```
 
 # Incorporating flow data into our physeq
 
@@ -708,9 +513,9 @@ pig_for_join <- wide_pig %>%
          Depth_Class = ifelse(Depth == "EW", "S","B"),
          Rep_ID = paste(Month, Station_ID, Depth_Class, sep = "_"),
          total_chl_counts = pig_counts_chl_big + pig_counts_chl_small) %>%
-  select(Rep_ID, avg_cells_per_ml:pig_counts_no_chl_low_pe, total_chl_counts) %>%
+  select(Rep_ID, avg_cells_per_ml:pig_counts_chl_small, total_chl_counts) %>%
   group_by(Rep_ID)%>%
-  summarize(across(c(avg_cells_per_ml:pig_counts_no_chl_low_pe, total_chl_counts), \(x)mean(x, na.rm = TRUE)))
+  summarize(across(c(avg_cells_per_ml:pig_counts_chl_small, total_chl_counts), \(x)mean(x, na.rm = TRUE)))
 
 meta_w_flow <- sample_data(meta_physeq) %>%
   data.frame() %>%
@@ -728,303 +533,10 @@ head(sample_data(flow_physeq))
 
 ```
 
-# Grabbing some specific samples for examination
 
-```{r fig.width = 14, fig.height = 14}
-load("/local/workdir/arp277/AAN_LSN_Superior_NERR/data/01_Flow_Cytometry/big_algae_gate.RData")
-
-ggcyto::ggcyto_par_set("instrument")
-
-reps_of_interest <- meta_w_flow %>%
-  dplyr::filter(DNA_ID %in% c("KH_D032",
-                              "KH_D064",
-                              "KH_D064",
-                              "KH_D066",
-                              "KH_D065",
-                              "KH_D039",
-                              "KH_D047",
-                              "KH_D070",
-                              "KH_D058",
-                              "KH_D079",
-                              "KH_D078",
-                              "KH_D042",
-                              "KH_D041",
-                              "KH_D040",
-                              "KH_D054",
-                              "KH_D051")) %>%
-  select(DNA_ID, Rep_ID)
-
-samples_of_interest <- wide_pig %>%
-  separate_wider_delim(Sample_ID, delim = "_", names = c("a","b","Date", "Station_ID","c","Depth","e"), cols_remove = FALSE) %>%
-  mutate(Month = case_when(str_detect(Date, "202405") ~ "May",
-                           str_detect(Date, "202408") ~ "August",
-                           str_detect(Date, "202409") ~ "September"),
-         Depth_Class = ifelse(Depth == "EW", "S","B"),
-         Rep_ID = paste(Month, Station_ID, Depth_Class, sep = "_"),
-         total_chl_counts = pig_counts_high_chl_high_pe + pig_counts_high_chl_no_pe + pig_counts_low_chl_no_pe)  %>%
-  select(Sample_ID, Rep_ID) %>%
-  dplyr::filter(Rep_ID %in% reps_of_interest$Rep_ID) %>%
-  left_join(reps_of_interest)
-
-wells_to_keep <- 
-  wellmaps %>%
-  bind_rows(.id = "Plate") %>%
-  dplyr::filter(Sample_ID %in% samples_of_interest$Sample_ID,
-                Target == "Pigment") %>%
-  group_by(Sample_ID) %>%
-  sample_n(1) %>%
-  dplyr::filter(str_detect(Sample_ID, "1$")) %>%
-  ungroup() %>%
-  group_split(Plate) %>%
-  map(pull, Well)
-
-
-files_of_interest <- map2(pigment_sets[c(1,2,4,5,6,7,8,9)], wells_to_keep, \(x,y){
-  data.frame(sample = sampleNames(x)) %>%
-  mutate(Well = str_extract(sample, "....fcs|...fcs"),
-         Well = str_remove(Well, ".fcs"),
-         Well = str_remove(Well, "_"),
-         Well = ifelse(nchar(Well) == 2, paste0(substr(Well, 1, 1), "0", substr(Well, 2, 2)), Well)) %>%
-    filter(Well %in% y)
-})
-
-
-full_files <- map2(files_of_interest, names(files_of_interest), \(x,y){
-  x %>%
-    mutate(filename = file.path("data/06_Flow_Cytometry",y, sample)) %>%
-    pull(filename)
-}) %>%
-  unlist()
-
-ip_fs <- read.flowSet(full_files)
-
-flo_names <- sampleNames(ip_fs)
-
-data.frame(file_name = flo_names)
-good_names <- data.frame(file_name = flo_names,
-           Sample_ID = c("AAM_ERI_20240913_60_FC_EW_1",
-                         "AAM_ERI_20240810_966_FC_EW_1",
-                         "AAM_ERI_20240814_932_FC_EW_1",
-                         "AAM_ERI_20240915_78_FC_EW_1",
-                         "AAM_ERI_20240916_09_FC_EW_1",
-                         "AAM_ERI_20240916_10_FC_EW_1",
-                         "AAM_ERI_20240913_958_FC_EW_1",
-                         "AAM_ERI_20240914_959_FC_EW_1",
-                         "AAM_ERI_20240810_59_FC_EW_1",
-                         "AAM_ERI_20240813_95_FC_EW_1",
-                         "AAM_ERI_20240915_937_FC_EW_1",
-                         "AAM_ERI_20240810_91_FC_EW_1",
-                         "AAM_ERI_20240913_58_FC_EW_1",
-                         "AAM_ERI_20240913_59_FC_EW_1",
-                         "AAM_ERI_20240915_22_FC_EW_1"
-                         )) %>%
-  left_join(samples_of_interest)
-
-dplyr::filter(wellmaps[[4]], Well == "A02")
-  
-
-group_annotation <- data.frame(DNA_ID = c("KH_D032",
-                              "KH_D064",
-                              "KH_D066",
-                              "KH_D065",
-                              "KH_D039",
-                              "KH_D047",
-                              "KH_D070",
-                              "KH_D058",
-                              "KH_D079",
-                              "KH_D078",
-                              "KH_D042",
-                              "KH_D041",
-                              "KH_D040",
-                              "KH_D054",
-                              "KH_D051"),
-           Group = c(rep("High Micro",6),
-                     rep("High Pseudana.",4),
-                     rep("Just Cyanob.", 5)))
-
-full_names <- good_names %>%
-  left_join(group_annotation) %>%
-  mutate(full = paste(Group, Rep_ID, sep = ":")) %>%
-  pull(full)
-
-good_name_fs <- flow.gus::rename_flowset_samples(ip_fs, full_names)
-
-ggcyto(good_name_fs,
-       aes(x = "FSC.H", y = "BL3.H")) + 
-  geom_hex(bins = 100) + 
-  scale_y_logicle() + 
-  scale_x_logicle() + 
-  coord_cartesian(xlim = c(1e2, 1e7),
-                  ylim = c(1e2, 1e7)) + 
-  geom_gate(big_algae_gate) + 
-  theme(legend.position = "right") + 
-  geom_stats(type = "count")
-
-ggcyto(good_name_fs,
-       aes(x = "SSC.H", y = "BL3.H")) + 
-  geom_hex(bins = 100) + 
-  scale_y_logicle() + 
-  scale_x_logicle() + 
-  coord_cartesian(xlim = c(1e2, 1e7),
-                  ylim = c(1e2, 1e7)) + 
-  theme(legend.position = "right")
-
-
-flow_indices <- good_names %>%
-  left_join(group_annotation) %>%
-  mutate(index = c(1:nrow(.))) %>%
-  group_split(Group)
-
-
-ggcyto(good_name_fs[flow_indices[[1]]$index],
-       aes(x = "FSC.H", y = "BL3.H")) + 
-  geom_hex(bins = 100) + 
-  scale_y_logicle() + 
-  scale_x_logicle() + 
-  coord_cartesian(xlim = c(1e2, 1e7),
-                  ylim = c(1e2, 1e7)) + 
-  geom_gate(big_algae_gate) + 
-  labs(subtitle = "High Microcystis")+ 
-  theme(legend.position = "right") + 
-  geom_stats(type = "count")
-
-ggcyto(good_name_fs[flow_indices[[2]]$index],
-       aes(x = "FSC.H", y = "BL3.H")) + 
-  geom_hex(bins = 100) + 
-  scale_y_logicle() + 
-  scale_x_logicle() + 
-  coord_cartesian(xlim = c(1e3, 1e6),
-                  ylim = c(1e3, 1e6)) + 
-  geom_gate(big_algae_gate) + 
-  labs(subtitle = "High Pseudanabanae")+ 
-  theme(legend.position = "right") + 
-  geom_stats(type = "count")
-
-ggcyto(good_name_fs[flow_indices[[3]]$index],
-       aes(x = "FSC.H", y = "BL3.H")) + 
-  geom_hex(bins = 100) + 
-  scale_y_logicle() + 
-  scale_x_logicle() + 
-  coord_cartesian(xlim = c(1e2, 1e7),
-                  ylim = c(1e2, 1e7)) + 
-  theme(legend.position = "right") + 
-  geom_gate(big_algae_gate) + 
-  geom_stats(type = "count")+
-  labs(subtitle = "Mostly Cyanobium")
-
-```
 
 ## Plotting with our flow_physeq
 
-```{r cells-across-basins-months}
-
-meta_w_flow %>%
-  mutate(Month = factor(Month, levels = c("May","August","September")),
-         Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  ggplot(aes(x = Basin, y = avg_cells_per_ml)) + 
-  geom_boxplot() + 
-  geom_jitter() + 
-  facet_wrap(~Month)
-
-meta_w_flow %>%
-  ggplot(aes(x = avg_cells_per_ml, y = rsg_total_per_ml)) + 
-  geom_point() + 
-  geom_abline(slope = 1, intercept  = 0) + 
-  coord_fixed(xlim = c(1e5, 1e7), ylim = c(1e5, 1e7))
-
-meta_w_flow %>%
-  ggplot(aes(x = avg_cells_per_ml, y = rsg_pos_per_ml)) + 
-  geom_point()
-
-
-meta_w_flow %>%
-  ggplot(aes(x = avg_cells_per_ml, y = rsg_perc_pos)) + 
-  geom_point()
-
-meta_w_flow %>%
-  mutate(Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Depth_Class == "S", Month == "September") %>%
-  ggplot(aes(x = Basin, y = rsg_perc_pos)) + 
-  geom_boxplot() + 
-  geom_jitter()
-
-meta_w_flow %>%
-  mutate(Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Depth_Class == "S", Month == "September") %>%
-  ggplot(aes(x = Basin, y = rsg_pos_per_ml)) + 
-  geom_boxplot() + 
-  geom_jitter()
-
-meta_w_flow %>%
-  mutate(Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Depth_Class == "S", Month == "September") %>%
-  ggplot(aes(x = Basin, y = rsg_mfi)) + 
-  geom_boxplot() + 
-  geom_jitter()
-
-```
-
-
-```{r cells-vs-chl-counts}
-meta_w_flow %>%
-  mutate(Month = factor(Month, levels = c("May","August","September")),
-         Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  ggplot(aes(x = avg_cells_per_ml, y = total_chl_counts, color = Basin)) + 
-  geom_jitter() + 
-  facet_wrap(~Month)
-
-```
-
-```{r cells-vs-pig-gates}
-meta_w_flow %>%
-  mutate(Month = factor(Month, levels = c("May","August","September")),
-         Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  pivot_longer(pig_counts_high_chl_high_pe:pig_counts_no_chl_low_pe, names_to = "chl_class", values_to = "count") %>%
-  ggplot(aes(x = avg_cells_per_ml, y = count, color = Basin)) + 
-  geom_jitter() + 
-  facet_wrap(~chl_class)
-```
-
-```{r chl-class-month-basin}
-meta_w_flow %>%
-  mutate(Month = factor(Month, levels = c("May","August","September")),
-         Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Month != "May") %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  pivot_longer(pig_counts_high_chl_high_pe:pig_counts_no_chl_low_pe, names_to = "chl_class", values_to = "count") %>%
-  filter(chl_class %in% c("pig_counts_high_chl_high_pe", "pig_counts_low_chl_no_pe", "pig_counts_high_chl_no_pe")) %>%
-  mutate(chl_class = factor(chl_class, levels = c("pig_counts_high_chl_high_pe", "pig_counts_low_chl_no_pe", "pig_counts_high_chl_no_pe"),
-                             labels = c("HC_HP","LC_LP", "HC_LP"))) %>%
-  ggplot(aes(x = Basin, y = count, color = chl_class)) + 
-  geom_boxplot(position = position_dodge(width = 1)) + 
-  geom_jitter(position = position_jitterdodge(dodge.width = 1, jitter.width = .3)) + 
-  facet_wrap(~Month) + 
-  scale_color_manual(values = c("goldenrod","firebrick", "green3")) + 
-  labs(y = "Absolute Counts")
-
-```
-
-```{r chl-class-percent-month-basin}
-meta_w_flow %>%
-  mutate(Month = factor(Month, levels = c("May","August","September")),
-         Basin = factor(Basin, levels = c("W","C","E"))) %>%
-  dplyr::filter(Month != "May") %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  pivot_longer(pig_counts_high_chl_high_pe:pig_counts_no_chl_low_pe, names_to = "chl_class", values_to = "count") %>%
-  filter(chl_class %in% c("pig_counts_high_chl_high_pe", "pig_counts_low_chl_no_pe", "pig_counts_high_chl_no_pe")) %>%
-  mutate(chl_class = factor(chl_class, levels = c("pig_counts_high_chl_high_pe", "pig_counts_low_chl_no_pe", "pig_counts_high_chl_no_pe"),
-                             labels = c("HC_HP","LC_LP", "HC_LP"))) %>%
-  ggplot(aes(x = Basin, y = count/avg_cells_per_ml, color = chl_class)) + 
-  geom_boxplot(position = position_dodge(width = 1)) + 
-  geom_jitter(position = position_jitterdodge(dodge.width = 1, jitter.width = .3)) + 
-  facet_wrap(~Month) + 
-  scale_color_manual(values = c("goldenrod","firebrick", "green3")) + 
-  labs(y = "Percent of Community")
-
-```
 
 ```{r Figure2Supp-AcrossMonths, fig.width = 4, fig.height = 4}
 
@@ -1054,6 +566,51 @@ meta_w_flow %>%
   stat_compare_means(method = "wilcox", comparisons = list(c(1,2), c(2,3), c(1,3)), label = "p.signif") +
   ggbeeswarm::geom_beeswarm() +
   labs(x = "", y = "Large Chl+Cells/ml (millions)")
+
+
+```
+
+```{r Figure2Bottom-AcrossBasins, fig.width = 4, fig.height = 4}
+
+meta_w_flow %>%
+  filter(DNA_ID != "KH_D076", Depth_Class == "B") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  filter(Month!="May") %>%
+  ggplot(aes(x = Basin, y = avg_cells_per_ml)) + 
+  geom_boxplot() + 
+  stat_compare_means(method = "wilcox", comparisons = list(c(1,2)), label = "p.signif") +
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6), expand = expansion(mult = c(0,0.1))) + 
+  ggbeeswarm::geom_beeswarm() +
+  facet_wrap(~Month, scales = "free") + 
+  theme(strip.text = element_blank(),
+        axis.title = element_blank()) 
+  
+
+meta_w_flow %>%
+  filter(DNA_ID != "KH_D076", Depth_Class == "B") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+   filter(Month!="May") %>%
+  ggplot(aes(x = Basin, y = total_chl_counts)) + 
+  geom_boxplot() + 
+  stat_compare_means(method = "wilcox", comparisons = list(c(1,2)), label = "p.signif") +
+  scale_y_continuous(labels = scales::unit_format(unit = "K", scale = 1e-3), expand = expansion(mult = c(0,0.1))) + 
+  ggbeeswarm::geom_beeswarm() +
+  facet_wrap(~Month, scales = "free") + 
+  theme(strip.text = element_blank(),
+        axis.title = element_blank()) 
+
+meta_w_flow %>%
+  filter(DNA_ID != "KH_D076", Depth_Class == "B") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+   filter(Month!="May") %>%
+  ggplot(aes(x = Basin, y = pig_counts_chl_big)) + 
+  geom_boxplot() + 
+  stat_compare_means(method = "wilcox", comparisons = list(c(1,2)), label = "p.signif") +
+  scale_y_continuous(labels = scales::unit_format(unit = "K", scale = 1e-3), expand = expansion(mult = c(0,0.1))) + 
+  ggbeeswarm::geom_beeswarm() +
+  facet_wrap(~Month, scales = "free") + 
+  theme(strip.text = element_blank(),
+        axis.title = element_blank()) 
 
 
 ```
@@ -1151,8 +708,7 @@ save(meta_w_flow, file = "data/06_Flow_Cytometry/meta_w_flow.RData")
 
 ```{r load-mapping-packages}
 
-
-pacman::p_load(sf, terra)
+pacman::p_load(sf, terra, install = FALSE)
 
 # Define some shapes and objects
 
@@ -1166,6 +722,146 @@ flow_sf <- meta_w_flow %>% dplyr::filter(!is.na(Longitude)) %>%
   st_as_sf(coords = c("Longitude","Latitude"), crs = "EPSG:4326") %>%
   dplyr::filter(DNA_ID != "KH_D076") %>%
   mutate(Month = factor(Month, levels = c("May","August","September") ))
+```
+
+```{r Figure2_Surface, fig.widh = 10, fig.height = 4}
+
+flow_sf %>%
+  dplyr::filter(Depth_Class == "S", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = avg_cells_per_ml), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  labs(color = "Cells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+
+flow_sf %>%
+  dplyr::filter(Depth_Class == "S", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = total_chl_counts), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "PRGn", na.value = "white", direction = 1, labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  labs(color = "Chl+ Cells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+
+flow_sf %>%
+  dplyr::filter(Depth_Class == "S", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = pig_counts_chl_big), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Greens", na.value = "white", direction = 1, labels = scales::unit_format(unit = "K", scale = 1e-3)) + 
+  labs(color = "Large\nChl+ Cells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+
+flow_sf %>%
+  dplyr::filter(Depth_Class == "S", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = rsg_pos_per_ml), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  labs(color = "RSG+\ncells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+
+flow_sf %>%
+  dplyr::filter(Depth_Class == "S", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = rsg_perc_pos), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "% RSG+") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+
+
+```
+
+```{r Figure2_Bottom, fig.widh = 10, fig.height = 4}
+
+flow_sf %>%
+  dplyr::filter(Depth_Class == "B", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = avg_cells_per_ml), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  labs(color = "Cells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+
+flow_sf %>%
+  dplyr::filter(Depth_Class == "B", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = total_chl_counts), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "PRGn", na.value = "white", direction = 1, labels = scales::unit_format(unit = "K", scale = 1e-3)) + 
+  labs(color = "Chl+ Cells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+
+flow_sf %>%
+  dplyr::filter(Depth_Class == "B", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = pig_counts_chl_big), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Greens", na.value = "white", direction = 1, labels = scales::unit_format(unit = "K", scale = 1e-3)) + 
+  labs(color = "Large\nChl+ Cells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+
+flow_sf %>%
+  dplyr::filter(Depth_Class == "B", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = rsg_pos_per_ml), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  labs(color = "RSG+\ncells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+
+flow_sf %>%
+  dplyr::filter(Depth_Class == "B", Month != "May") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = rsg_perc_pos), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "% RSG+") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+
+
 ```
 
 ```{r Figure2d_f, fig.width = 10, fig.height = 4}
@@ -1453,269 +1149,33 @@ meta_w_flow %>%
 
 ```
 
-```{r cells-spatial}
+```{r}
 
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = avg_cells_per_ml), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "red", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA)
+meta_w_flow %>%
+  ggplot(aes(x = total_chl_counts, y = avg_cells_per_ml - total_chl_counts)) + 
+  geom_point() + 
+  scale_y_log10() + 
+  scale_x_log10() + 
+  ggpubr::stat_cor(method = "spearman")
 
-bottom_sf <- flow_sf %>%
-  dplyr::filter(Depth_Class == "B", Month == "September")
-
-shift_bottom_sf <- bottom_sf
-
-st_geometry(shift_bottom_sf) <- st_geometry(bottom_sf) + c(.06,-.03)
-
-shift_bottom_sf <- st_set_crs(shift_bottom_sf, st_crs(bottom_sf))
-
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S", Month == "September") %>%
-  ggplot() + 
-  geom_sf(data = shift_bottom_sf, aes(color = avg_cells_per_ml), size = 5, alpha = 1) + 
-  geom_sf(aes(color = avg_cells_per_ml), size = 5, alpha = 1) + 
-  scale_color_distiller(palette = "Spectral", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Total cells/ml")
-
-```
-
-```{r rsg-spatial}
-
-flow_sf %>%
-  dplyr::filter(Month == "September", Depth_Class == "S") %>%
-  ggplot() + 
-  geom_sf(data = shift_bottom_sf, aes(color = rsg_pos_per_ml), size = 5, alpha = 1) + 
-  geom_sf(aes(color = rsg_pos_per_ml), size = 5, alpha = 1) + 
-  scale_color_distiller(palette = "Spectral", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "RSG+/ml")
-
-flow_sf %>%
-  dplyr::filter(Month == "September", Depth_Class == "S") %>%
-  ggplot() + 
-  geom_sf(data = shift_bottom_sf, aes(color = rsg_perc_pos), size = 5, alpha = 1) + 
-  geom_sf(aes(color = rsg_perc_pos), size = 5, alpha = 1) + 
-  scale_color_distiller(palette = "Spectral", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "% RSG+")
-
-flow_sf %>%
-  dplyr::filter(Month == "September", Depth_Class == "S") %>%
-  ggplot() + 
-  geom_sf(data = shift_bottom_sf, aes(color = rsg_mfi), size = 5, alpha = 1) + 
-  geom_sf(aes(color = rsg_mfi), size = 5, alpha = 1) + 
-  scale_color_distiller(palette = "Spectral", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "RSG Intensity")
+meta_w_flow %>%
+  ggplot(aes(x = total_chl_counts, y = avg_cells_per_ml - total_chl_counts)) + 
+  geom_point() + 
+  scale_y_log10() + 
+  scale_x_log10() + 
+  ggpubr::stat_cor(method = "spearman")
 
 
-flow_sf %>%
-  dplyr::filter(Month == "September", Depth_Class == "S") %>%
-  ggplot() + 
-  geom_sf(data = shift_bottom_sf, aes(color = rsg_mfi), size = 5, alpha = 1) + 
-  geom_sf(aes(color = total_chl_counts), size = 5, alpha = 1) + 
-  scale_color_distiller(palette = "PRGn", na.value = "white", direction = 1) + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Total Chl+")
-
-flow_sf %>%
-  dplyr::filter(Month == "September", Depth_Class == "S") %>%
-  ggplot() + 
-  geom_sf(data = shift_bottom_sf, aes(color = rsg_mfi), size = 5, alpha = 1) + 
-  geom_sf(aes(color = pig_counts_chl_big), size = 5, alpha = 1) + 
-  scale_color_distiller(palette = "PRGn", na.value = "white", direction = 1) + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Big Chl+")
-
-flow_sf %>%
-  dplyr::filter(Month == "September", Depth_Class == "S") %>%
-  ggplot() + 
-  geom_sf(data = shift_bottom_sf, aes(color = rsg_mfi), size = 5, alpha = 1) + 
-  geom_sf(aes(color = pig_counts_chl_small), size = 5, alpha = 1) + 
-  scale_color_distiller(palette = "PRGn", na.value = "white", direction = 1) + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Small Chl+")
-```
-
-
-```{r total-chl-spatial}
-
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = total_chl_counts), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "green", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA)
-
-```
-
-```{r pig-types-spatial}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = pig_counts_low_chl_no_pe), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "green", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Low Chl, No PE")
-
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = pig_counts_high_chl_no_pe), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "green", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "High Chl, No PE")
-
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = pig_counts_high_chl_high_pe), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "green", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "High PE")
-
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = pig_counts_chl_big), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(transform = "log10", low = "blue", high = "green", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Big Chl")
-
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = pig_counts_chl_small), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "green", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Small Chl")
-
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = pig_counts_chl_big / avg_cells_per_ml), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "orange", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Big Chl % of Total Community")
-
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = pig_counts_chl_big / total_chl_counts), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "orange", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA) + 
-  labs(color = "Big Chl % of Phototrophs")
-
-```
-
-
-```{r surface-temp-spatial}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = Water_Surface_Temp_C), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "red", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA)
-
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S",
-                Month == "September") %>%
-  ggplot() + 
-  geom_sf(aes(color = Water_Surface_Temp_C), size = 3, alpha = 0.7) + 
-  scale_color_gradient(low = "blue", high = "red", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA)
-
-flow_sf %>%
-  dplyr::filter(Depth_Class == "S",
-                Month == "August") %>%
-  ggplot() + 
-  geom_sf(aes(color = Water_Surface_Temp_C), size = 3, alpha = 0.7) + 
-  scale_color_gradient(low = "blue", high = "red", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA)
-```
-
-
-```{r bottom-temp-spatial}
-flow_sf %>%
-  dplyr::filter(Depth_Class == "B") %>%
-  mutate(Month = factor(Month, levels = c("May", "August","September"))) %>%
-  ggplot() + 
-  geom_sf(aes(color = Water_Surface_Temp_C), size = 3, alpha = 0.7) + 
-  facet_wrap(~Month, ncol = 1) + 
-  scale_color_gradient(low = "blue", high = "red", na.value = "white") + 
-  geom_sf(data = erie_outline, fill = NA)
-
-```
-
-# Write-out objects
-
-```{r cleaning-sample_info-for-qgis, eval = FALSE}
-
-grouped <- sample_info_w_flow %>%
-  dplyr::filter(!is.na(avg_cells_per_ml)) %>%
-  select(-Sample_ID, -Notes) %>%
-  group_by(across(!where(is.numeric))) %>%
-  summarize(across(where(is.numeric), mean)) %>%
-  ungroup() %>%
-  group_by(Month, Depth_Class)
-
-split <- grouped %>%
-  group_split() %>%
-  map(\(x)st_as_sf(x, coords = c("Longitude","Latitude"), crs = "EPSG:4326"))
-
-names(split) <- group_keys(grouped) %>%
-  mutate(Name = paste("Sample_Flow",Month, Depth_Class, sep = "_")) %>%
-  pull(Name)
-
-
-map2(split, names(split),
-     \(x,y){
-       st_write(x, paste0("analysis/QGIS_Work/", y, ".gpkg"), append = FALSE)
-     })
-   
 
 
 ```
+
 
 
 ```{r write-out}
 
-save(sample_info_w_flow, file = "data/06_Flow_Cytometry/sample_info_w_flow.RData")
-
 save(flow_physeq, file ="data/06_Flow_Cytometry/flow_physeq.RData")
 
-load("data/04a_Eukaryotic_TreeBuilding/tree_euk_physeq.RData")
-
-euk_flow_physeq <- tree_euk_physeq
-
-euk_flow_physeq@sam_data <- NULL
-
-euk_flow_physeq@sam_data <- sample_data(meta_w_flow)
-
-save(euk_flow_physeq, file ="data/06_Flow_Cytometry/euk_flow_physeq.RData")
 
 ```
 
