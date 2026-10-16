@@ -1,7 +1,7 @@
 ---
 title: "Looking at Sample Taxonomic Composition" 
 author: "Augustus Pendleton"
-date: "29 January, 2026"
+date: "12 October, 2026"
 knitr: 
   opts_chunk: 
     fig.path: ../figures/09_Compositional_Analysis/
@@ -36,237 +36,6 @@ trim_melted <-
 :::
 
 
-# Exploring correlation of pigment classes and cyanobacterial groups
-
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-top_10_fam <- 
-  trim_melted %>%
-  dplyr::filter(Phylum == "p__Cyanobacteriota", !is.na(Family)) %>%
-  group_by(Family) %>%
-  summarize(Count = max(Abundance)) %>%
-  ungroup() %>%
-  slice_max(order_by = Count, n = 10) %>%
-  pull(Family)
-
-cors <- trim_melted %>%
-  dplyr::filter(Phylum == "p__Cyanobacteriota", Family %in% top_10_fam) %>%
-  group_by(Sample_ID, Family) %>%
-  summarize(Count = sum(Abundance),
-            Total_Chl = mean(total_chl_counts),
-            Big_Chl = mean(pig_counts_chl_big),
-            Small_Chl = mean(pig_counts_chl_small),
-            High_chl_no_pe = mean(pig_counts_high_chl_no_pe),
-            Low_chl_no_pe = mean(pig_counts_low_chl_no_pe),
-            High_chl_high_pe = mean(pig_counts_high_chl_high_pe)) %>%
-  ungroup() %>%
-  group_by(Family) %>%
-  summarize(cor_to_total_chl = cor(Total_Chl, Count),
-            cor_to_big_chl = cor(Big_Chl, Count),
-            cor_to_small_chl = cor(Small_Chl, Count),
-            cor_to_hcnp = cor(High_chl_no_pe, Count),
-            cor_to_lcnp = cor(Low_chl_no_pe, Count),
-            cor_to_hchp = cor(High_chl_high_pe, Count))
-
-cors %>%
-  ggplot(aes(x = cor_to_small_chl, y = cor_to_big_chl, label = Family)) + 
-  geom_point() + 
-  geom_label() + 
-  coord_equal(xlim = c(0,1), ylim = c(0,1)) + 
-  labs(x = "Correlation to Small Chl Counts", y = "Correlation to Big Chl Counts")
-```
-
-::: {.cell-output-display}
-![](../figures/09_Compositional_Analysis/cyano-cors-1.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-cors %>%
-  ggplot(aes(x = cor_to_hcnp, y = cor_to_lcnp, label = Family)) + 
-  geom_point() + 
-  geom_label() + 
-  coord_equal(xlim = c(0,1), ylim = c(0,1))
-```
-
-::: {.cell-output-display}
-![](../figures/09_Compositional_Analysis/cyano-cors-2.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-cors %>%
-  ggplot(aes(x = cor_to_total_chl, y = cor_to_hchp, label = Family)) + 
-  geom_point() + 
-  geom_label() + 
-  coord_equal(xlim = c(0,1), ylim = c(0,1))
-```
-
-::: {.cell-output-display}
-![](../figures/09_Compositional_Analysis/cyano-cors-3.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-cors %>%
-  ggplot(aes(x = cor_to_total_chl, y = cor_to_big_chl, label = Family)) + 
-  geom_point() + 
-  geom_label() + 
-  coord_equal(xlim = c(0,1), ylim = c(0,1))
-```
-
-::: {.cell-output-display}
-![](../figures/09_Compositional_Analysis/cyano-cors-4.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-cors %>%
-  ggplot(aes(x = cor_to_total_chl, y = cor_to_small_chl, label = Family)) + 
-  geom_point() + 
-  geom_label() + 
-  coord_equal(xlim = c(0,1), ylim = c(0,1))
-```
-
-::: {.cell-output-display}
-![](../figures/09_Compositional_Analysis/cyano-cors-5.png){fig-align='center' width=2100}
-:::
-
-```{.r .cell-code}
-trim_melted %>%
-  select(pig_counts_chl_big, pig_counts_chl_small) %>%
-  unique() %>%
-  cor()
-```
-
-::: {.cell-output .cell-output-stdout}
-```
-                     pig_counts_chl_big pig_counts_chl_small
-pig_counts_chl_big            1.0000000            0.2875343
-pig_counts_chl_small          0.2875343            1.0000000
-```
-:::
-
-```{.r .cell-code}
-trim_melted %>%
-  select(pig_counts_chl_big, pig_counts_chl_small, total_chl_counts) %>%
-  unique() %>%
-  cor()
-```
-
-::: {.cell-output .cell-output-stdout}
-```
-                     pig_counts_chl_big pig_counts_chl_small total_chl_counts
-pig_counts_chl_big            1.0000000            0.2875343        0.3754041
-pig_counts_chl_small          0.2875343            1.0000000        0.9956618
-total_chl_counts              0.3754041            0.9956618        1.0000000
-```
-:::
-:::
-
-
-A vast majority of total chl counts are "small" counts.
-
-# Exploring Stacked Bar Plots
-
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-dna_id_order <-  ggdendro::dendro_data(bray_dendro)$label$label
-
-sample_annotation <- 
-  trim_melted %>%
-  select(DNA_ID, Station_ID, Month, Basin, Bray_Group) %>%
-  unique() %>%
-  mutate(DNA_ID = factor(DNA_ID, levels = dna_id_order))
-
-basin_plot <- sample_annotation %>%
-  ggplot(aes(x=1, y = DNA_ID)) + 
-  geom_tile(aes(fill = Basin)) + 
-  scale_fill_manual(values = basin_colors, name = "Basin") + 
-  theme_void()+ 
-  theme(legend.position = "left")
-
-month_plot <- sample_annotation %>%
-  ggplot(aes(x=1, y = DNA_ID)) + 
-  geom_tile(aes(fill = Month)) + 
-  scale_fill_manual(values = month_colors, name = "Month") + 
-  theme_void()+ 
-  theme(legend.position = "left")
-
-group_plot <- sample_annotation %>%
-  ggplot(aes(x = 1, y = DNA_ID)) + 
-  geom_tile(aes(fill = Bray_Group)) + 
-  scale_fill_manual(values = group_colors, name = "Group") + 
-  theme_void() + 
-  theme(legend.position = "left")
-
-barplot <- trim_melted %>%
-  mutate(DNA_ID = factor(DNA_ID, levels = dna_id_order)) %>%
-  group_by(DNA_ID, Class) %>%
-  summarize(Class_Abund = sum(Abundance)) %>%
-  ungroup() %>%
-  group_by(Class) %>%
-  mutate(Class = ifelse(max(Class_Abund) > 90000, Class, "(Rare)"),
-         Class = str_remove(Class, "c__")) %>%
-  ungroup() %>% 
-  ggplot(aes(x = Class_Abund, y = DNA_ID, fill = Class)) + 
-  geom_col() +
-  scale_fill_manual(values = class_colors) + 
-  labs(x = "Absolute Abundance") + 
-  theme(axis.title.y = element_blank(),
-        axis.text.y= element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.line.y= element_blank(),
-        plot.margin = margin()) + 
-  scale_x_continuous(expand = c(0,0))
-
-group_plot + month_plot  + basin_plot + barplot +
-  plot_layout(nrow = 1, 
-              widths = c(1,1,1, 16),
-              guides = "collect") & 
-  theme(legend.position = "left")
-```
-
-::: {.cell-output-display}
-![](../figures/09_Compositional_Analysis/stacked-bar-plots-1.png){fig-align='center' width=2400}
-:::
-:::
-
-::: {.cell layout-align="center"}
-
-```{.r .cell-code}
-cy_barplot <- trim_melted %>%
-  mutate(DNA_ID = factor(DNA_ID, levels = dna_id_order)) %>%
-  dplyr::filter(Phylum == "p__Cyanobacteriota") %>%
-  group_by(DNA_ID, Family) %>%
-  summarize(Fam_Abund = sum(Abundance)) %>%
-  ungroup() %>%
-  group_by(Family) %>% 
-  mutate(Family = ifelse(max(Fam_Abund) > 3000, Family, "(Rare)"),
-         Family = str_remove(Family, "f__")) %>%
-  ungroup() %>% 
-  ggplot(aes(x = Fam_Abund, y = DNA_ID, fill = Family)) + 
-  geom_col() +
-  scale_fill_manual(values = cyano_family_colors) + 
-  labs(x = "Absolute Abundance") + 
-  theme(axis.title.y = element_blank(),
-        axis.text.y= element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.line.y= element_blank(),
-        plot.margin = margin()) + 
-  scale_x_continuous(expand = c(0,0))
-
-group_plot + month_plot  + basin_plot + cy_barplot +
-  plot_layout(nrow = 1, 
-              widths = c(1,1,1, 16),
-              guides = "collect") & 
-  theme(legend.position = "left")
-```
-
-::: {.cell-output-display}
-![](../figures/09_Compositional_Analysis/just-cyanos-1.png){fig-align='center' width=2100}
-:::
-:::
 
 
 Now using our grouping by cyanos specifically
@@ -292,16 +61,20 @@ cy_annotation <-
          Cy_Group_Name = case_when(
            Cy_Group == 1 ~ "Deep Desert",
            Cy_Group == 2 ~ "Peak Bloom",
-           Cy_Group == 3 ~ "Cyanobium Dominated",
-           Cy_Group == 4 ~ "Sep. Diverse Cyanos",
-           Cy_Group == 5 ~ "Bloom Adjacent"),
+           Cy_Group == 3 ~ "Eastern Basin",
+           Cy_Group == 4 ~ "Sep. Central Basin",
+           Cy_Group == 5 ~ "Bloom Adjacent 2",
+           Cy_Group == 6 ~ "Aug. Central Basin",
+           Cy_Group == 7 ~ "Bloom Adjacent 1"),
          Cy_Group_Name = factor(Cy_Group_Name,
                                 levels = c(
                                   "Deep Desert",
                                   "Peak Bloom",
-                                  "Bloom Adjacent",
-                                  "Sep. Diverse Cyanos",
-                                  "Cyanobium Dominated"
+                                  "Bloom Adjacent 1",
+                                  "Bloom Adjacent 2",
+                                  "Sep. Central Basin",
+                                  "Aug. Central Basin",
+                                  "Eastern Basin"
                                 ))) %>%
   dplyr::filter(DNA_ID != "KH_D076")
 
@@ -346,7 +119,7 @@ group_plot + cy_bars +
 ```
 
 ::: {.cell-output-display}
-![](../figures/09_Compositional_Analysis/Figure3b-1.png){fig-align='center' width=1800}
+![](../figures/09_Compositional_Analysis/Figure3b-1.png){fig-align='center' width=2700}
 :::
 
 ```{.r .cell-code}
@@ -382,56 +155,102 @@ group_plot + cy_rel +
 ```
 
 ::: {.cell-output-display}
-![](../figures/09_Compositional_Analysis/Figure3b-2.png){fig-align='center' width=1800}
+![](../figures/09_Compositional_Analysis/Figure3b-2.png){fig-align='center' width=2700}
 :::
-:::
-
-::: {.cell layout-align="center"}
 
 ```{.r .cell-code}
-cy_melt %>%
-  dplyr::filter(Station_ID %in% c("58", "59", "G09")) %>%
-  dplyr::filter(Phylum == "p__Cyanobacteriota") %>%
-  mutate(Genus = str_remove(Genus, "g__")) %>%
-  group_by(DNA_ID, Genus, Month, Station_ID, Family) %>%
-  summarize(Genus_Abund = sum(Abundance)) %>%
-  ungroup() %>%
-  group_by(Genus) %>% 
-  mutate(Genus = ifelse(max(Genus_Abund) < 40000, "(Rare)", Genus),
-         Genus = str_remove(Genus, "g__"),
-         Genus_Test = is.na(Genus),
-         Genus = ifelse(is.na(Genus), "(Rare)", Genus),
-         Genus = factor(Genus, levels = rev(c(
-             "(Rare)",
-             "Cyanobium_A_31525",
-           "GFB01",
-           "Synechococcus_D",
-           "Vulcanococcus" ,
-           "Microcystis",
-            "Pseudanabaena",
-           "Gloeocapsa",
-           "Planktothrix",
-           "Gloeothece",
-           "Dolichospermum"
-         )))) %>% 
-  ungroup() %>% 
-  ggplot(aes(x = Genus_Abund, y = paste(Month, Station_ID, sep = "_"), fill = Genus)) + 
-  geom_col() +
-  labs(x = "Absolute Abundance") + 
-  theme(axis.ticks.y = element_blank(),
-        axis.line.y= element_blank(),
-        plot.margin = margin()) + 
-  scale_x_continuous(expand = c(0,0), labels = scales::label_comma()) + 
-  scale_fill_manual(values = cyano_genus_colors) + 
-  labs(x = "Absolute Abundance (cells/ml)",
-       y = "") + 
-  theme(axis.text.y = element_blank())
+plot(cy_dendro)
 ```
 
 ::: {.cell-output-display}
-![](../figures/09_Compositional_Analysis/three-stations-1.png){fig-align='center' width=2400}
+![](../figures/09_Compositional_Analysis/Figure3b-3.png){fig-align='center' width=2700}
 :::
+
+```{.r .cell-code}
+ cy_genus_abs <- 
+   cy_melt %>%
+  filter(DNA_ID != "KH_D076") %>%
+  mutate(DNA_ID = factor(DNA_ID, levels = rev(cy_order))) %>%
+  dplyr::filter(Phylum == "p__Cyanobacteriota") %>%
+  group_by(DNA_ID, Family, Genus) %>%
+  summarize(Fam_Abund = sum(Abundance)) %>%
+  ungroup() %>%
+  group_by(Genus) %>%
+  mutate(Genus = case_when(is.na(Genus) & Family == "f__Cyanobiaceae" ~"Unassigned Cyanobiaceae",
+                           is.na(Genus) ~ "Unassigned",
+                           max(Fam_Abund) > 50000~ Genus,
+                           TRUE ~ "(Rare)"),
+         Genus = str_remove(Genus, "g__")
+         ) %>% 
+  ungroup() %>%
+  group_by(Family) %>% 
+  mutate(Family = str_remove(Family, "f__"),
+         Genus = factor(Genus, levels = names(cyano_genus_colors))) %>%
+   ungroup() %>% 
+  ggplot(aes(x = Fam_Abund, y = DNA_ID, fill = Genus)) + 
+  geom_col() +
+  scale_fill_manual(values = cyano_genus_colors) + 
+  scale_x_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6), expand = c(0,0)) + 
+  labs(x = "Absolute Abundance") + 
+  theme(axis.title.y = element_blank(),
+        axis.text.y= element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.line.y= element_blank(),
+        plot.margin = margin()) 
+ 
+  
+ group_plot + cy_genus_abs +
+  plot_layout(nrow = 1, 
+              widths = c(1,16),
+              guides = "collect") & 
+  theme(legend.position = "left")
+```
+
+::: {.cell-output-display}
+![](../figures/09_Compositional_Analysis/Figure3b-4.png){fig-align='center' width=2700}
 :::
+
+```{.r .cell-code}
+ tip_annotation_df <- 
+  cyano_physeq %>%
+  sample_data() %>%
+  data.frame() %>%
+  select(Month, DNA_ID)
+
+tip_groups <- data.frame(DNA_ID = dendro_data(cy_dendro)$labels$label) %>%
+   left_join(tip_annotation_df)
+
+dend_data <- dendro_data(cy_dendro)
+
+cy_dendro <- ggplot(dend_data$segments) + 
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend)) + 
+  geom_point(data = dend_data$labels, aes(x = x, y = y, color = tip_groups$Month), size = 2) + 
+  theme_void() +
+  coord_flip() + 
+  scale_y_reverse() + 
+  scale_x_reverse()+
+  scale_color_manual(values = month_colors) +
+  scale_alpha_manual(values = c(0.8,0,0.8,0.8)) + 
+  labs(color = "Month") + 
+  theme(plot.margin=grid::unit(c(0,0,0,0), "mm"))
+
+cy_dendro +  group_plot + cy_genus_abs +
+  plot_layout(nrow = 1, 
+              widths = c(8,1, 16),
+              guides = "collect") & 
+  theme(legend.position = "left")
+```
+
+::: {.cell-output-display}
+![](../figures/09_Compositional_Analysis/Figure3b-5.png){fig-align='center' width=2700}
+:::
+
+```{.r .cell-code}
+ggsave("test.png", width = 9, height= 8)
+```
+:::
+
+
 
 
 # Mapping Cyanos
@@ -452,11 +271,30 @@ trim_melted %>%
   dplyr::filter(Phylum == "p__Cyanobacteriota") %>%
   group_by(DNA_ID) %>%
   summarize(total_cyanos = sum(Abundance),
+            total_phototrophs = mean(total_chl_counts),
+            diff = total_cyanos - total_phototrophs) %>%
+  pull(diff) %>%
+  median()
+```
+
+::: {.cell-output .cell-output-stdout}
+```
+[1] 181693.6
+```
+:::
+
+```{.r .cell-code}
+trim_melted %>%
+  dplyr::filter(Phylum == "p__Cyanobacteriota") %>%
+  group_by(DNA_ID) %>%
+  summarize(total_cyanos = sum(Abundance),
             total_phototrophs = mean(total_chl_counts)) %>%
   ggplot(aes(x = total_cyanos, y = total_phototrophs)) + 
   geom_point() + 
-  ggpubr::stat_cor() + 
-  geom_abline(intercept = 0, slope = 1)
+  ggpubr::stat_cor(method = "spearman") + 
+  geom_abline(intercept = 0, slope = 1) + 
+  scale_y_log10() + 
+  scale_x_log10()
 ```
 
 ::: {.cell-output-display}
@@ -980,7 +818,8 @@ tax_table(tree_meta_physeq) %>%
 
 ::: {.cell-output .cell-output-error}
 ```
-Error in h(simpleError(msg, call)): error in evaluating the argument 'x' in selecting a method for function 'unique': error in evaluating the argument 'object' in selecting a method for function 'tax_table': object 'tree_meta_physeq' not found
+Error in `h()`:
+! error in evaluating the argument 'x' in selecting a method for function 'unique': error in evaluating the argument 'object' in selecting a method for function 'tax_table': object 'tree_meta_physeq' not found
 ```
 :::
 :::

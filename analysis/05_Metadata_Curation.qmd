@@ -706,6 +706,36 @@ meta_sf %>%
         strip.text = element_blank()
         )
 
+meta_sf %>%
+  filter(Month != "May", Depth_Class == "S") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = ctd_beamAttenuation), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "Surface\nBeam Attenuation (1/m)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
+meta_sf %>%
+  filter(Month != "May", Depth_Class == "B") %>%
+  mutate(Month = factor(Month, levels = c("May","August","September"))) %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = ctd_beamAttenuation), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "Bottom\nBeam Attenuation (1/m)") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank()
+        )
+
 
 ```
 

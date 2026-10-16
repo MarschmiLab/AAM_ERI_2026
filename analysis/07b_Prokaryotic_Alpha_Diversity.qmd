@@ -13,6 +13,7 @@ editor_options:
 # Load packages 
 ```{r load-packages}
 
+
 pacman::p_load(phyloseq, tidyverse, ggpubr, microViz, fun.gus, ggbeeswarm, patchwork, install = FALSE)
 
 source("code/R/plotting_aesthetics.R")

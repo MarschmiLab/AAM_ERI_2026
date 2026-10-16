@@ -1,7 +1,7 @@
 ---
 title: "Analyzing Flow Cytometry Data" 
 author: "Augustus Pendleton"
-date: "19 February, 2026"
+date: "08 October, 2026"
 knitr: 
   opts_chunk: 
     fig.path: ../figures/06_Flow_Cytometry/
@@ -242,4 +242,56 @@ ggplot(fsc_res, aes(x = Size, y = FSCs)) +
 ::: {.cell-output-display}
 ![](../figures/06_Flow_Cytometry/demo_size_standard_curve-1.png){fig-align='center' width=900}
 :::
+:::
+
+::: {.cell layout-align="center"}
+
+```{.r .cell-code}
+size_lm <- lm(Size~FSCs, data = fsc_res)
+
+
+int <- size_lm$coefficients[1]
+slope <- size_lm$coefficients[2]
+
+September_951 <- read.FCS("data/06_Flow_Cytometry/Demo_FSC_Counts/September_951.fcs")
+September_58 <- read.FCS("data/06_Flow_Cytometry/Demo_FSC_Counts/September_58.fcs")
+May_43 <- read.FCS("data/06_Flow_Cytometry/Demo_FSC_Counts/May_43.fcs")
+May_91 <- read.FCS("data/06_Flow_Cytometry/Demo_FSC_Counts/May_91.fcs")
+August_59 <- read.FCS("data/06_Flow_Cytometry/Demo_FSC_Counts/August_59.fcs")
+August_73 <- read.FCS("data/06_Flow_Cytometry/Demo_FSC_Counts/August_73.fcs")
+
+size_list <- list(
+     May_43 = May_43,
+     May_91 = May_91,
+     August_59 = August_59,
+     August_73 = August_73,
+     September_951 = September_951,
+     September_58 = September_58
+     )
+
+size_dist_plots <- 
+  map2(size_list, names(size_list), \(x,y){
+  x@exprs %>%
+  as.data.frame() %>%
+  mutate(size = int + slope * `FSC-A`) %>%
+  arrange(size) %>%
+  mutate(cum_perc = row_number() / n()) %>%
+  ggplot(aes(x = size, y = cum_perc)) + 
+  geom_line() + 
+      coord_cartesian(xlim = c(0,20)) + 
+  labs(title = y, x = "Estimated Size (um)", y = "Cumulative % of Events")
+})
+
+
+patchwork::wrap_plots(size_dist_plots) + 
+  patchwork::plot_layout(ncol = 2)
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/size_summary-1.png){fig-align='center' width=1800}
+:::
+
+```{.r .cell-code}
+ggsave(filename = "test.png", width = 6, height = 10)
+```
 :::

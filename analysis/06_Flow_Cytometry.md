@@ -1,7 +1,7 @@
 ---
 title: "Analyzing Flow Cytometry Data" 
 author: "Augustus Pendleton"
-date: "12 October, 2026"
+date: "16 October, 2026"
 knitr: 
   opts_chunk: 
     fig.path: ../figures/06_Flow_Cytometry/
@@ -911,7 +911,7 @@ meta_w_flow %>%
 ```
 
 ::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/Figure2Bottom-AcrossBasins-1.png){fig-align='center' width=1200}
+![](../figures/06_Flow_Cytometry/Figure2Bottom-AcrossBasins-1.png){fig-align='center' width=2400}
 :::
 
 ```{.r .cell-code}
@@ -930,7 +930,7 @@ meta_w_flow %>%
 ```
 
 ::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/Figure2Bottom-AcrossBasins-2.png){fig-align='center' width=1200}
+![](../figures/06_Flow_Cytometry/Figure2Bottom-AcrossBasins-2.png){fig-align='center' width=2400}
 :::
 
 ```{.r .cell-code}
@@ -949,7 +949,7 @@ meta_w_flow %>%
 ```
 
 ::: {.cell-output-display}
-![](../figures/06_Flow_Cytometry/Figure2Bottom-AcrossBasins-3.png){fig-align='center' width=1200}
+![](../figures/06_Flow_Cytometry/Figure2Bottom-AcrossBasins-3.png){fig-align='center' width=2400}
 :::
 :::
 
@@ -1197,6 +1197,85 @@ flow_sf %>%
 :::
 :::
 
+::: {.cell layout-align="center" figure.width='6' figure.height='4'}
+
+```{.r .cell-code}
+flow_sf %>%
+  dplyr::filter(Depth_Class == "S", Month == "September") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = het_rsg_per_ml), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  labs(color = "Heterotrophic\nRSG+ cells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure-2Supp-RSG-Het_vs_Cy-1.png){fig-align='center' width=2100}
+:::
+
+```{.r .cell-code}
+flow_sf %>%
+  dplyr::filter(Depth_Class == "S", Month == "September") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = rsg_pos_per_ml - het_rsg_per_ml), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white", labels = scales::unit_format(unit = "M", scale = 1e-6)) + 
+  labs(color = "Cyanobacterial\nRSG+ cells/ml") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure-2Supp-RSG-Het_vs_Cy-2.png){fig-align='center' width=2100}
+:::
+
+```{.r .cell-code}
+flow_sf %>%
+  dplyr::filter(Depth_Class == "S", Month == "September") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = het_rsg_perc_pos), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "Heterotrophic\n% RSG+") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure-2Supp-RSG-Het_vs_Cy-3.png){fig-align='center' width=2100}
+:::
+
+```{.r .cell-code}
+flow_sf %>%
+  dplyr::filter(Depth_Class == "S", Month == "September") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(aes(color = (rsg_pos_per_ml - het_rsg_per_ml) / (rsg_total_per_ml - (het_rsg_per_ml/het_rsg_perc_pos))), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "Cyanobacterial\n% RSG+") + 
+  facet_wrap(~Month) + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Figure-2Supp-RSG-Het_vs_Cy-4.png){fig-align='center' width=2100}
+:::
+:::
+
 ::: {.cell layout-align="center" fig.widh='10'}
 
 ```{.r .cell-code}
@@ -1432,7 +1511,6 @@ flow_sf %>%
   dplyr::filter(Depth_Class == "S", Month != "May") %>%
   ggplot() + 
   geom_sf(data = erie_outline, fill = NA) + 
-  geom_sf(data = filter(shift_bottom_sf, Month != "May"), aes(color = tn_ug_n_l), size = 5, alpha = 1) + 
   geom_sf(aes(color = tn_ug_n_l), size = 5, alpha = 1) + 
   scale_color_distiller(palette = "Spectral", na.value = "white") + 
   labs(color = "TN (ug N/L)") + 
@@ -1544,8 +1622,8 @@ flow_sf %>%
   dplyr::filter(Depth_Class == "S", Month != "May") %>%
   ggplot() + 
   geom_sf(data = erie_outline, fill = NA) + 
-  geom_sf(aes(color = Anatoxin_Total), size = 5, alpha = 1) + 
-  scale_color_gradient(low = "white", high = "firebrick2", breaks = c(0,0.02,0.04)) + 
+  geom_sf(aes(fill = Anatoxin_Total), size = 5, alpha = 1, color = "black", shape = 21, stroke = .2) + 
+  scale_fill_gradient(low = "white", high = "firebrick2", breaks = c(0,0.02,0.04)) + 
   facet_wrap(~Month) + 
   labs(color = "Anatoxins\n(μg/L)") + 
   theme(axis.line = element_blank(),
@@ -1563,8 +1641,8 @@ flow_sf %>%
   dplyr::filter(Depth_Class == "S", Month != "May") %>%
   ggplot() + 
   geom_sf(data = erie_outline, fill = NA) + 
-  geom_sf(aes(color = Microcystin_Total), size = 5, alpha = 1) + 
-  scale_color_gradient(low = "white", high = "forestgreen") + 
+  geom_sf(aes(fill = Microcystin_Total), size = 5, alpha = 1, color = "black", shape = 21, stroke = .2) + 
+  scale_fill_gradient(low = "white", high = "forestgreen") + 
   facet_wrap(~Month) + 
   labs(color = "Microcystins\n(μg/L)") + 
   theme(axis.line = element_blank(),
@@ -1636,6 +1714,25 @@ flow_sf %>%
 ::: {.cell-output-display}
 ![](../figures/06_Flow_Cytometry/Fig2-RSG-Maps-3.png){fig-align='center' width=2100}
 :::
+
+```{.r .cell-code}
+flow_sf %>%
+  dplyr::filter(Depth_Class == "S", Month == "September") %>%
+  ggplot() + 
+  geom_sf(data = erie_outline, fill = NA) + 
+  geom_sf(data = shift_bottom_sf, aes(color = rsg_pos_per_ml/1e6), size = 5, alpha = 1) + 
+  geom_sf(aes(color = rsg_pos_per_ml/1e6), size = 5, alpha = 1) + 
+  scale_color_distiller(palette = "Spectral", na.value = "white") + 
+  labs(color = "RSG+ Cells/ml\n(millions)") + 
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank())
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Fig2-RSG-Maps-4.png){fig-align='center' width=2100}
+:::
 :::
 
 ::: {.cell layout-align="center"}
@@ -1680,6 +1777,51 @@ meta_w_flow %>%
 
 ::: {.cell-output-display}
 ![](../figures/06_Flow_Cytometry/Fig2-RSG-Boxplots-2.png){fig-align='center' width=600}
+:::
+:::
+
+::: {.cell layout-align="center"}
+
+```{.r .cell-code}
+meta_w_flow %>%
+  filter(DNA_ID != "KH_D076", Depth_Class == "B", Month == "September") %>%
+  mutate(Month = factor(Month, levels = c("September")),
+         Basin = factor(Basin, levels = c("W","C","E"))) %>%
+  ggplot(aes(x = Basin, y = rsg_pos_per_ml)) + 
+    stat_summary(geom = "errorbar", fun.min = mean, fun.max = mean, width = 0.5, linewidth = 1)+ 
+  stat_summary(geom = "errorbar", fun.min = \(x)mean(x)-sd(x), fun.max = \(x)mean(x) + sd(x), width = 0.3, linewidth = .25)+ 
+  scale_y_continuous(labels = scales::unit_format(unit = "M", scale = 1e-6), expand = expansion(mult = c(0,0.1))) + 
+  stat_compare_means(method = "wilcox", comparisons = list(c(1,2), c(2,3), c(1,3)), label = "p.signif") +
+  ggbeeswarm::geom_beeswarm() +
+  labs(x = "Basin") + 
+  facet_wrap(~Month, scales = "free") + 
+  theme(strip.text = element_blank(),
+        axis.title = element_blank()) 
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Fig2-RSG-Boxplots-Bottom-1.png){fig-align='center' width=600}
+:::
+
+```{.r .cell-code}
+meta_w_flow %>%
+  filter(DNA_ID != "KH_D076", Depth_Class == "B", Month == "September") %>%
+  mutate(Month = factor(Month, levels = c("September")),
+         Basin = factor(Basin, levels = c("W","C","E"))) %>%
+  ggplot(aes(x = Basin, y = rsg_perc_pos)) + 
+    stat_summary(geom = "errorbar", fun.min = mean, fun.max = mean, width = 0.5, linewidth = 1)+ 
+  stat_summary(geom = "errorbar", fun.min = \(x)mean(x)-sd(x), fun.max = \(x)mean(x) + sd(x), width = 0.3, linewidth = .25)+
+  scale_y_continuous(expand = expansion(mult = c(0,0.1))) + 
+  stat_compare_means(method = "wilcox", comparisons = list(c(1,2), c(2,3), c(1,3)), label = "p.signif") +
+  ggbeeswarm::geom_beeswarm() +
+  labs(x = "Basin") + 
+  facet_wrap(~Month, scales = "free") + 
+  theme(strip.text = element_blank(),
+        axis.title = element_blank()) 
+```
+
+::: {.cell-output-display}
+![](../figures/06_Flow_Cytometry/Fig2-RSG-Boxplots-Bottom-2.png){fig-align='center' width=600}
 :::
 :::
 
@@ -1741,7 +1883,7 @@ devtools::session_info()
  collate  en_US.UTF-8
  ctype    en_US.UTF-8
  tz       America/New_York
- date     2026-10-12
+ date     2026-10-16
  pandoc   3.1.1 @ /usr/lib/rstudio-server/bin/quarto/bin/tools/ (via rmarkdown)
 
 ─ Packages ───────────────────────────────────────────────────────────────────
